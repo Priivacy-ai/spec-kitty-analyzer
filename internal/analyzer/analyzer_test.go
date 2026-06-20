@@ -113,6 +113,20 @@ func TestSearchSnippetsDoNotBecomeFailures(t *testing.T) {
 	}
 }
 
+func TestBranchWorktreeAndMergeFingerprints(t *testing.T) {
+	branchText := "Exit code 1 Branch: on 'fix/task-workflow-bug-fixes', mission targets 'main'. Agent appears to be on the wrong worktree."
+	branchFailures := classifyFailures(branchText, nil, nil)
+	if !failureListHas(branchFailures, "branch_worktree_confusion") {
+		t.Fatalf("branch failures=%#v want branch_worktree_confusion", branchFailures)
+	}
+
+	mergeText := "Error: merge preflight blocked because branch ref advance failed before merge."
+	mergeFailures := classifyFailures(mergeText, nil, nil)
+	if !failureListHas(mergeFailures, "merge_operation_failed") {
+		t.Fatalf("merge failures=%#v want merge_operation_failed", mergeFailures)
+	}
+}
+
 func TestStructuredOpContextDoesNotBecomeGenericFailure(t *testing.T) {
 	stringResult := map[string]any{
 		"toolUseResult": `{"invocation_id":"01KOP","profile_id":"python-pedro","action":"generate","governance_context_text":"Handle command failure carefully."}`,

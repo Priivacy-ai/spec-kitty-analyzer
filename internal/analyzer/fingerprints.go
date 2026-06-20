@@ -77,6 +77,22 @@ var failureRules = []failureRule{
 		},
 	},
 	{
+		id:       "branch_worktree_confusion",
+		title:    "Branch or worktree context confusion",
+		severity: "high",
+		recovery: "Run git status and git worktree list, verify the intended mission worktree/branch, cd into it, then retry the Spec Kitty action.",
+		patterns: []*regexp.Regexp{
+			rx(`(?i)\bwrong (branch|worktree|work tree)\b`),
+			rx(`(?i)\b(branch|worktree|work tree).{0,100}\b(confus|mismatch|ambiguous|unexpected|wrong)\b`),
+			rx(`(?i)\b(confus|mismatch|ambiguous|unexpected|wrong).{0,100}\b(branch|worktree|work tree)\b`),
+			rx(`(?i)\b(on|current) branch\b.{0,120}\bmission targets\b`),
+			rx(`(?i)\bmission targets\b.{0,120}\bbranch\b`),
+			rx(`(?i)\bcoord(?:ination)? worktree\b.{0,120}\b(main checkout|target|branch)\b`),
+			rx(`(?i)\bnot (in|on) (the )?(expected|target|mission) (worktree|work tree|branch)\b`),
+			rx(`(?i)\bNo auto-detection is performed.*branch`),
+		},
+	},
+	{
 		id:       "dirty_worktree_ref_advance",
 		title:    "Dirty checked-out worktree blocked ref advance",
 		severity: "high",
@@ -108,6 +124,18 @@ var failureRules = []failureRule{
 			rx(`(?i)merge conflict`),
 			rx(`(?i)Automatic merge failed`),
 			rx(`(?i)rebase.*conflict`),
+		},
+	},
+	{
+		id:       "merge_operation_failed",
+		title:    "Merge operation failed or was blocked",
+		severity: "high",
+		recovery: "Inspect the merge/ref-advance output, resolve branch/worktree preconditions, then rerun the merge command.",
+		patterns: []*regexp.Regexp{
+			rx(`(?i)\bmerge\b.{0,100}\b(failed|blocked|error|refused|aborted)\b`),
+			rx(`(?i)\b(failed|blocked|error|refused|aborted)\b.{0,100}\bmerge\b`),
+			rx(`(?i)\bmerge gate\b.{0,100}\b(failed|blocked|error)\b`),
+			rx(`(?i)\bmerge preflight\b.{0,100}\b(failed|blocked|error)\b`),
 		},
 	},
 	{

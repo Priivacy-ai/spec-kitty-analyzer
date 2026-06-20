@@ -18,7 +18,39 @@ It detects:
 - timeline order from JSON timestamps, file order, and line numbers
 - documented Spec Kitty failure modes with recovery guidance
 
-## Usage
+## Install
+
+Release installers use prebuilt native binaries. Go is not required on the
+machine where the tool is installed or run.
+
+macOS/Linux:
+
+```bash
+curl -fsSL https://github.com/Priivacy-ai/spec-kitty-analyzer/releases/latest/download/install.sh | sh
+```
+
+Windows PowerShell:
+
+```powershell
+iwr https://github.com/Priivacy-ai/spec-kitty-analyzer/releases/latest/download/install.ps1 -OutFile install.ps1
+powershell -ExecutionPolicy Bypass -File .\install.ps1
+```
+
+The installers put `spec-kitty-analyzer` on PATH and copy the bundled
+`spec-kitty-analyzer` skill into existing `~/.agents/skills` and
+`~/.claude/skills` directories. Missing skill roots are left untouched.
+
+Release assets include:
+
+- `spec-kitty-analyzer_linux_amd64.tar.gz`
+- `spec-kitty-analyzer_linux_arm64.tar.gz`
+- `spec-kitty-analyzer_darwin_amd64.tar.gz`
+- `spec-kitty-analyzer_darwin_arm64.tar.gz`
+- `spec-kitty-analyzer_windows_amd64.zip`
+- `spec-kitty-analyzer_windows_arm64.zip`
+- `install.sh`, `install.ps1`, and `checksums.txt`
+
+## Reports
 
 Mission-first mode scans harness logs, caches mission-to-log mappings in
 `~/.spec-kitty-analyzer/cache.json`, then reports only the selected mission:
@@ -53,6 +85,47 @@ go run ./cmd/spec-kitty-analyzer analyze \
 
 By default the command writes JSON, Markdown, HTML, and PDF reports next to the
 JSON path. Use `--json-only` for structured output only.
+
+## Agent JSON API
+
+Agents and scripts should prefer `query`, which emits filtered JSON. The
+timeline in this output only contains positive Spec Kitty signals: mission/Op
+scope, slash commands, CLI invocations, skill reads, agent profiles, Spec Kitty
+tool names, and deterministic Spec Kitty failure fingerprints.
+
+```bash
+spec-kitty-analyzer missions --limit 20
+```
+
+```bash
+spec-kitty-analyzer query task-workflow-bug-fixes-01KV69BZ \
+  --include timeline,signals,findings
+```
+
+Useful focused queries:
+
+```bash
+spec-kitty-analyzer query task-workflow-bug-fixes-01KV69BZ \
+  --include timeline,signals,findings \
+  --failure-id branch_worktree_confusion
+```
+
+```bash
+spec-kitty-analyzer query task-workflow-bug-fixes-01KV69BZ \
+  --include timeline,signals,findings \
+  --command merge
+```
+
+Selectors can be repeated or comma-separated:
+
+- `--include all|inputs|missions|ops|findings|timeline|signals|surface`
+- `--failure-id <id-or-title>`
+- `--command <slash-name|cli-verb|mission|work-package|agent|profile>`
+- `--skill <skill-name-or-path>`
+- `--profile <profile-or-agent>`
+- `--scope <mission:<slug>|op:<id>|outside|mission|op>`
+- `--contains <text>` for ad-hoc search inside already filtered Spec Kitty
+  timeline events
 
 ## Scope Model
 

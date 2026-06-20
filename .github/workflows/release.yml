@@ -1,0 +1,74 @@
+name: release
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: build release assets
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Test
+        run: go test ./...
+
+      - name: Build packages
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          targets=(
+            "linux amd64"
+            "linux arm64"
+            "darwin amd64"
+            "darwin arm64"
+            "windows amd64"
+            "windows arm64"
+          )
+          for target in "${targets[@]}"; do
+            read -r os arch <<<"${target}"
+            package="spec-kitty-analyzer_${os}_${arch}"
+            stage="dist/${package}"
+            mkdir -p "${stage}/skills/spec-kitty-analyzer" "${stage}/install"
+            cp README.md "${stage}/"
+            compgen -G "LICENSE*" >/dev/null && cp LICENSE* "${stage}/" || true
+            cp skills/spec-kitty-analyzer/SKILL.md "${stage}/skills/spec-kitty-analyzer/SKILL.md"
+            cp install/install.sh install/install.ps1 "${stage}/install/"
+            if [[ "${os}" == "windows" ]]; then
+              CGO_ENABLED=0 GOOS="${os}" GOARCH="${arch}" go build -trimpath -ldflags="-s -w" -o "${stage}/spec-kitty-analyzer.exe" ./cmd/spec-kitty-analyzer
+              (cd "${stage}" && zip -qr "../${package}.zip" .)
+            else
+              CGO_ENABLED=0 GOOS="${os}" GOARCH="${arch}" go build -trimpath -ldflags="-s -w" -o "${stage}/spec-kitty-analyzer" ./cmd/spec-kitty-analyzer
+              chmod +x "${stage}/spec-kitty-analyzer" "${stage}/install/install.sh"
+              tar -C "${stage}" -czf "dist/${package}.tar.gz" .
+            fi
+          done
+          cp install/install.sh dist/install.sh
+          cp install/install.ps1 dist/install.ps1
+          chmod +x dist/install.sh
+          (cd dist && shasum -a 256 spec-kitty-analyzer_* install.sh install.ps1 > checksums.txt)
+
+      - name: Upload release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dist/spec-kitty-analyzer_*.tar.gz
+            dist/spec-kitty-analyzer_*.zip
+            dist/install.sh
+            dist/install.ps1
+            dist/checksums.txt
+          generate_release_notes: true

@@ -87,8 +87,10 @@ func WriteMarkdown(report analyzer.Report, path string) error {
 	}
 
 	b.WriteString("## Timeline\n\n")
+	timeline := FilteredTimeline(report)
+	fmt.Fprintf(&b, "_Showing %d Spec Kitty timeline events; filtered out %d harness-only events._\n\n", len(timeline), len(report.Timeline)-len(timeline))
 	b.WriteString("| Seq | Scope | Kind | Command/Skill/Failure | Source |\n|---:|---|---|---|---|\n")
-	for _, e := range report.Timeline {
+	for _, e := range timeline {
 		fmt.Fprintf(&b, "| %d | %s | `%s` | %s | `%s:%d` |\n", e.Seq, scopeText(e.Scope), e.Kind, escapeMD(eventSignal(e)), e.SourcePath, e.Line)
 	}
 	return writeFile(path, []byte(b.String()))
@@ -129,8 +131,10 @@ func WriteHTML(report analyzer.Report, path string) error {
 	b.WriteString("</tbody></table>")
 
 	b.WriteString("<h2>Timeline</h2>")
+	timeline := FilteredTimeline(report)
+	fmt.Fprintf(&b, "<p class=\"muted\">Showing %d Spec Kitty timeline events; filtered out %d harness-only events.</p>", len(timeline), len(report.Timeline)-len(timeline))
 	b.WriteString("<table><thead><tr><th>Seq</th><th>Scope</th><th>Kind</th><th>Signal</th><th>Source</th></tr></thead><tbody>")
-	for _, e := range report.Timeline {
+	for _, e := range timeline {
 		fmt.Fprintf(&b, "<tr><td>%d</td><td>%s</td><td><code>%s</code></td><td>%s</td><td><code>%s:%d</code></td></tr>", e.Seq, html.EscapeString(scopeText(e.Scope)), html.EscapeString(e.Kind), html.EscapeString(eventSignal(e)), html.EscapeString(e.SourcePath), e.Line)
 	}
 	b.WriteString("</tbody></table></body></html>")
@@ -231,8 +235,13 @@ func WritePDF(report analyzer.Report, path string) error {
 
 	pdf.Ln(5)
 	drawPDFSection(pdf, "Timeline")
-	rows := make([][]pdfCell, 0, len(report.Timeline))
-	for _, e := range report.Timeline {
+	timeline := FilteredTimeline(report)
+	pdf.SetFont("Helvetica", "", 8)
+	pdf.SetTextColor(87, 96, 106)
+	pdf.MultiCell(0, 4.5, fmt.Sprintf("Showing %d Spec Kitty timeline events; filtered out %d harness-only events.", len(timeline), len(report.Timeline)-len(timeline)), "", "", false)
+	pdf.Ln(1)
+	rows := make([][]pdfCell, 0, len(timeline))
+	for _, e := range timeline {
 		rows = append(rows, []pdfCell{
 			{Text: fmt.Sprintf("%04d", e.Seq), Style: "muted"},
 			{Text: scopeText(e.Scope), Style: "normal"},
@@ -243,6 +252,88 @@ func WritePDF(report analyzer.Report, path string) error {
 	}
 	drawPDFTable(pdf, []string{"Seq", "Scope", "Kind", "Signal", "Source"}, []float64{13, 42, 24, 75, 32}, rows)
 	return pdf.OutputFileAndClose(path)
+}
+
+type TimelineFilterSummary struct {
+	Mode     string `json:"mode"`
+	Included int    `json:"included"`
+	Excluded int    `json:"excluded"`
+}
+
+func TimelineFilter(report analyzer.Report) TimelineFilterSummary {
+	included := len(FilteredTimeline(report))
+	return TimelineFilterSummary{
+		Mode:     "spec-kitty-positive-signals",
+		Included: included,
+		Excluded: len(report.Timeline) - included,
+	}
+}
+
+func FilteredTimeline(report analyzer.Report) []analyzer.TimelineEvent {
+	out := make([]analyzer.TimelineEvent, 0, len(report.Timeline))
+	for _, event := range report.Timeline {
+		if IsSpecKittyTimelineEvent(event) {
+			out = append(out, event)
+		}
+	}
+	return out
+}
+
+func IsSpecKittyTimelineEvent(event analyzer.TimelineEvent) bool {
+	if event.Scope.Type == "mission" || event.Scope.Type == "op" {
+		return true
+	}
+	if len(event.SlashCommands) > 0 || len(event.CLIInvocations) > 0 || len(event.Skills) > 0 || len(event.AgentProfiles) > 0 {
+		return true
+	}
+	if isSpecKittyToolName(event.ToolName) {
+		return true
+	}
+	for _, failure := range event.Failures {
+		if isSpecKittyFailureID(failure.ID) {
+			return true
+		}
+	}
+	return false
+}
+
+func isSpecKittyToolName(name string) bool {
+	name = strings.ToLower(name)
+	return strings.Contains(name, "spec-kitty") || strings.Contains(name, "spk-")
+}
+
+func isSpecKittyFailureID(id string) bool {
+	switch id {
+	case "branch_worktree_confusion",
+		"circular_dependencies",
+		"completed_not_terminal_runtime_bug",
+		"config_yaml_invalid",
+		"dirty_worktree_ref_advance",
+		"guard_failure",
+		"manifest_drift",
+		"merge_conflict",
+		"merge_operation_failed",
+		"missing_artifact",
+		"namespace_package_import",
+		"no_code_commits",
+		"null_prompt_step_runtime_bug",
+		"ref_advance_non_fast_forward",
+		"review_rejected",
+		"reviewer_failed",
+		"runtime_blocked",
+		"runtime_not_initialized",
+		"saas_sync_flag_missing",
+		"skill_surface_missing",
+		"stale_agent",
+		"sync_auth_required",
+		"sync_boundary_preflight",
+		"tracker_binding_missing",
+		"worktree_linkage_broken",
+		"wrong_cli_surface":
+		return true
+	default:
+		return false
+	}
 }
 
 type pdfCell struct {
