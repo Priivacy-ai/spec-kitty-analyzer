@@ -1,0 +1,2 @@
+{"timestamp":"2026-06-20T08:01:00Z","event_type":"wp_lane_changed","mission_slug":"sample-mission","wp_id":"WP01","from_lane":"planned","to_lane":"in_progress","actor":"codex:gpt-5:implementer-ivan:implementer"}
+{"timestamp":"2026-06-20T08:02:00Z","event_type":"wp_lane_changed","mission_slug":"sample-mission","wp_id":"WP01","from_lane":"in_review","to_lane":"planned","review_status":"has_feedback","note":"review rejected"}

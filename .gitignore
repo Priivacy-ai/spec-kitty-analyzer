@@ -1,0 +1,21 @@
+# Go build/test artifacts
+bin/
+dist/
+*.test
+*.out
+coverage.*
+
+# Local environment
+.env
+.env.*
+
+# OS/editor noise
+.DS_Store
+.idea/
+.vscode/
+
+# Generated local reports
+report.json
+report.md
+report.html
+report.pdf
