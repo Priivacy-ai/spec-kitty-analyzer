@@ -60,7 +60,7 @@ jobs:
           cp install/install.sh dist/install.sh
           cp install/install.ps1 dist/install.ps1
           chmod +x dist/install.sh
-          (cd dist && shasum -a 256 spec-kitty-analyzer_* install.sh install.ps1 > checksums.txt)
+          (cd dist && shasum -a 256 spec-kitty-analyzer_*.tar.gz spec-kitty-analyzer_*.zip install.sh install.ps1 > checksums.txt)
 
       - name: Upload release
         uses: softprops/action-gh-release@v2
