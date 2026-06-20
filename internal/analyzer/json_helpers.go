@@ -28,8 +28,13 @@ func flattenJSON(obj map[string]any) string {
 				walk(item)
 			}
 		case map[string]any:
-			for _, item := range typed {
-				walk(item)
+			keys := make([]string, 0, len(typed))
+			for key := range typed {
+				keys = append(keys, key)
+			}
+			sort.Strings(keys)
+			for _, key := range keys {
+				walk(typed[key])
 			}
 		}
 	}

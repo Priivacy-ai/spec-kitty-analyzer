@@ -3,6 +3,7 @@ package analyzer
 import (
 	"path/filepath"
 	"testing"
+	"time"
 )
 
 func TestAnalyzeFixture(t *testing.T) {
@@ -71,6 +72,15 @@ func TestMissionHandleFiltering(t *testing.T) {
 	}
 }
 
+func TestMissionHandleNormalizationRejectsNoise(t *testing.T) {
+	if got := normalizeMissionHandle("task-workflow-bug-fixes-"); got != "task-workflow-bug-fixes" {
+		t.Fatalf("trailing dash normalized to %q", got)
+	}
+	if got := normalizeMissionHandle("01KV69BZEHXDSGGMR6J3QN0J2E"); got != "" {
+		t.Fatalf("standalone mission id normalized to %q want empty", got)
+	}
+}
+
 func TestSourceReadDoesNotBecomeFailure(t *testing.T) {
 	sourceRead := map[string]any{
 		"toolUseResult": map[string]any{
@@ -118,6 +128,51 @@ func TestStructuredOpContextDoesNotBecomeGenericFailure(t *testing.T) {
 	}
 	if failures := classifyFailures(flattenJSON(stdoutResult), stdoutResult, nil); len(failures) != 0 {
 		t.Fatalf("op context failures=%#v want none", failures)
+	}
+}
+
+func TestFlattenJSONIsDeterministic(t *testing.T) {
+	obj := map[string]any{
+		"z": "last",
+		"a": map[string]any{"b": "nested"},
+		"m": []any{"middle"},
+	}
+	want := "nested middle last"
+	for i := 0; i < 10; i++ {
+		if got := flattenJSON(obj); got != want {
+			t.Fatalf("flattenJSON=%q want %q", got, want)
+		}
+	}
+}
+
+func TestMissionFilterExcludesOtherMissionScope(t *testing.T) {
+	report := Report{
+		Version:     Version,
+		GeneratedAt: time.Now(),
+		Redactions:  map[string]int{},
+		Surface:     defaultSurface(),
+		Inputs:      []InputFile{{Path: "session.jsonl", Kind: "jsonl_transcript"}},
+		Timeline: []TimelineEvent{
+			{
+				Seq:         1,
+				SourcePath:  "session.jsonl",
+				Scope:       Scope{Type: "mission", MissionSlug: "target-01KV"},
+				TextPreview: "target-01KV",
+			},
+			{
+				Seq:         2,
+				SourcePath:  "session.jsonl",
+				Scope:       Scope{Type: "mission", MissionSlug: "other-01KV"},
+				TextPreview: "mentions target-01KV",
+			},
+		},
+	}
+	filtered := filterReportByMission(report, "target-01KV")
+	if len(filtered.Missions) != 1 || filtered.Missions[0].Slug != "target-01KV" {
+		t.Fatalf("missions=%#v", filtered.Missions)
+	}
+	if len(filtered.Timeline) != 1 {
+		t.Fatalf("timeline len=%d want 1", len(filtered.Timeline))
 	}
 }
 

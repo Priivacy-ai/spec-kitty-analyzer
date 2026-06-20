@@ -72,6 +72,70 @@ func Analyze(paths []string) (Report, error) {
 	return report, nil
 }
 
+func AnalyzeMission(paths []string, slug string) (Report, error) {
+	slug = normalizeMissionHandle(slug)
+	if slug == "" {
+		return Report{}, errors.New("mission slug is required")
+	}
+	report, err := Analyze(paths)
+	if err != nil {
+		return Report{}, err
+	}
+	filtered := filterReportByMission(report, slug)
+	if len(filtered.Timeline) == 0 {
+		return Report{}, fmt.Errorf("no timeline events found for mission %q", slug)
+	}
+	return filtered, nil
+}
+
+func filterReportByMission(report Report, slug string) Report {
+	keptSources := map[string]bool{}
+	timeline := make([]TimelineEvent, 0, len(report.Timeline))
+	for _, event := range report.Timeline {
+		if eventReferencesMission(event, slug) {
+			timeline = append(timeline, event)
+			keptSources[event.SourcePath] = true
+		}
+	}
+	for i := range timeline {
+		timeline[i].Seq = i + 1
+	}
+
+	inputs := make([]InputFile, 0, len(report.Inputs))
+	for _, input := range report.Inputs {
+		if keptSources[input.Path] {
+			inputs = append(inputs, input)
+		}
+	}
+
+	state := newBuildState()
+	state.absorbTimeline(timeline)
+	report.Inputs = inputs
+	report.Timeline = timeline
+	report.Missions = state.missions()
+	report.Ops = state.opSummaries()
+	report.Findings = buildFindings(report.Timeline, report.Ops)
+	report.Summary = buildSummary(report)
+	report.Notes = append(report.Notes, fmt.Sprintf("filtered to mission %s", slug))
+	normalizeReport(&report)
+	return report
+}
+
+func eventReferencesMission(event TimelineEvent, slug string) bool {
+	if event.Scope.MissionSlug == slug {
+		return true
+	}
+	if event.Scope.Type == "mission" && event.Scope.MissionSlug != "" {
+		return false
+	}
+	for _, inv := range event.CLIInvocations {
+		if inv.Mission == slug {
+			return true
+		}
+	}
+	return strings.Contains(event.TextPreview, slug)
+}
+
 func collectFiles(paths []string) ([]string, error) {
 	seen := map[string]bool{}
 	var files []string

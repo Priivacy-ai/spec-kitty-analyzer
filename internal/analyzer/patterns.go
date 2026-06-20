@@ -146,8 +146,8 @@ func normalizeMissionHandle(raw string) string {
 	}
 	raw = trimShell(raw)
 	raw = strings.Trim(raw, "[]()")
-	raw = strings.TrimRight(raw, ".,:;")
-	if raw == "" || strings.ContainsAny(raw, " \t\r\n") || !missionHandleRE.MatchString(raw) {
+	raw = strings.TrimRight(raw, ".,:;-_")
+	if raw == "" || strings.ContainsAny(raw, " \t\r\n") || !missionHandleRE.MatchString(raw) || looksLikeStandaloneMissionID(raw) {
 		return ""
 	}
 	switch strings.ToLower(raw) {
@@ -156,6 +156,25 @@ func normalizeMissionHandle(raw string) string {
 	default:
 		return raw
 	}
+}
+
+func looksLikeStandaloneMissionID(raw string) bool {
+	if len(raw) < 4 || !strings.HasPrefix(raw, "01") {
+		return false
+	}
+	hasDigit := false
+	hasUpper := false
+	for _, r := range raw {
+		switch {
+		case r >= '0' && r <= '9':
+			hasDigit = true
+		case r >= 'A' && r <= 'Z':
+			hasUpper = true
+		default:
+			return false
+		}
+	}
+	return hasDigit && hasUpper
 }
 
 func detectSkills(text string) []SkillUse {
