@@ -127,6 +127,36 @@ func TestBranchWorktreeAndMergeFingerprints(t *testing.T) {
 	}
 }
 
+func TestPermissionDeniedFingerprintPrecision(t *testing.T) {
+	positives := []string{
+		"OSError: [Errno 13] Permission denied: '/etc/hosts'",
+		"PermissionError: [Errno 13] Permission denied",
+		"open /var/run/lock: EACCES",
+		"failed to write file (os error 13)",
+		"bash: ./deploy.sh: Permission denied",
+		"git@github.com: Permission denied (publickey).",
+	}
+	for _, text := range positives {
+		failures := classifyFailures(text, nil, nil)
+		if !failureListHas(failures, "permission_denied") {
+			t.Errorf("text %q: failures=%#v want permission_denied", text, failures)
+		}
+	}
+
+	// Documentation/spec prose that merely discusses the phrase must NOT classify
+	// as a real denial — this is the false positive the anchored signatures fix.
+	negatives := []string{
+		"Filesystem error — permission denied, disk full, cross-filesystem rename",
+		"Exit code 2 contract: handle filesystem errors such as permission denied gracefully.",
+	}
+	for _, text := range negatives {
+		failures := classifyFailures(text, nil, nil)
+		if failureListHas(failures, "permission_denied") {
+			t.Errorf("prose %q: failures=%#v want no permission_denied", text, failures)
+		}
+	}
+}
+
 func TestStructuredOpContextDoesNotBecomeGenericFailure(t *testing.T) {
 	stringResult := map[string]any{
 		"toolUseResult": `{"invocation_id":"01KOP","profile_id":"python-pedro","action":"generate","governance_context_text":"Handle command failure carefully."}`,

@@ -315,7 +315,18 @@ var failureRules = []failureRule{
 		title:    "Permission denied",
 		severity: "medium",
 		recovery: "Fix file permissions, executable bits, or credential access before retrying.",
-		patterns: []*regexp.Regexp{rx(`(?i)\bpermission denied\b`)},
+		// Anchored error signatures only. A bare `permission denied` match also
+		// fires on documentation/spec prose that merely discusses the phrase
+		// (e.g. "Filesystem error — permission denied, disk full, ..."), so we
+		// require a concrete denial signature from a real OS/runtime/shell error.
+		patterns: []*regexp.Regexp{
+			rx(`\[Errno 13\] Permission denied`),
+			rx(`\bPermissionError\b`),
+			rx(`\bEACCES\b`),
+			rx(`\(os error 13\)`),
+			rx(`(?i)\b(?:bash|sh|zsh):.*permission denied`),
+			rx(`(?i)Permission denied \(publickey`),
+		},
 	},
 }
 
