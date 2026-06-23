@@ -190,6 +190,51 @@ func TestMissionFilterExcludesOtherMissionScope(t *testing.T) {
 	}
 }
 
+func TestWindowsPermissionDeniedSignatures(t *testing.T) {
+	// Positive: Windows-native access-denied forms that contain no "permission
+	// denied" substring and so were missed before issue #3. The first two are
+	// VERBATIM strings captured from a real Windows 11 host (2026-06-23):
+	//   python -c "import os; os.listdir(r'C:\System Volume Information')"
+	//   rg test "C:\System Volume Information"
+	positive := []struct {
+		name string
+		text string
+	}{
+		{"python_winerror_captured", `PermissionError: [WinError 5] Access is denied: 'C:\\System Volume Information'`},
+		{"rust_os_error_5_captured", `C:\System Volume Information: Access is denied. (os error 5)`},
+		{"rust_os_error_5_no_period", `caused by: Access is denied (os error 5)`}, // defensive: a Rust tool that omits the trailing period
+	}
+	for _, c := range positive {
+		failures := classifyFailures(c.text, nil, nil)
+		if !failureListHas(failures, "permission_denied") {
+			t.Fatalf("%s: failures=%#v want permission_denied", c.name, failures)
+		}
+	}
+
+	// Regression: the existing Unix "permission denied" recall must survive.
+	unix := classifyFailures(`ls: cannot open directory '/root': Permission denied`, nil, nil)
+	if !failureListHas(unix, "permission_denied") {
+		t.Fatalf("unix denial dropped: failures=%#v want permission_denied", unix)
+	}
+
+	// Documented finding (captured 2026-06-23): the SAME Windows denial via the C
+	// runtime (open()) rather than the Win32 API surfaces as the errno form
+	// "[Errno 13] Permission denied", which the pre-existing bare rule already
+	// catches. Both Windows Python denial forms are therefore covered.
+	crt := classifyFailures(`PermissionError: [Errno 13] Permission denied: 'C:\\Windows'`, nil, nil)
+	if !failureListHas(crt, "permission_denied") {
+		t.Fatalf("windows CRT errno form dropped: failures=%#v want permission_denied", crt)
+	}
+
+	// Precision: a bare "(os error 5)" must NOT match, because on Unix errno 5 is
+	// EIO ("Input/output error"), not an access denial. Guards against the naive
+	// candidate regex that would misclassify Rust EIO on Linux/macOS.
+	eio := classifyFailures(`Error: Input/output error (os error 5)`, nil, nil)
+	if failureListHas(eio, "permission_denied") {
+		t.Fatalf("Unix EIO misclassified as permission_denied: failures=%#v", eio)
+	}
+}
+
 func failureListHas(failures []FailureFingerprint, id string) bool {
 	for _, failure := range failures {
 		if failure.ID == id {

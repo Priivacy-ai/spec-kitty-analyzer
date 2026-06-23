@@ -315,7 +315,18 @@ var failureRules = []failureRule{
 		title:    "Permission denied",
 		severity: "medium",
 		recovery: "Fix file permissions, executable bits, or credential access before retrying.",
-		patterns: []*regexp.Regexp{rx(`(?i)\bpermission denied\b`)},
+		patterns: []*regexp.Regexp{
+			rx(`(?i)\bpermission denied\b`),
+			// Windows-native access-denied signatures (issue #3). Windows reports
+			// ERROR_ACCESS_DENIED (code 5) as "Access is denied", which contains no
+			// "permission denied" substring, so the rule above never matches it.
+			rx(`\[WinError 5\]`), // Python: PermissionError: [WinError 5] Access is denied
+			// Rust std::io::Error Display is "{message} (os error {code})" with the
+			// raw platform errno. On Windows code 5 == ERROR_ACCESS_DENIED, but on
+			// Unix errno 5 == EIO ("Input/output error"; EACCES is 13). Anchor to the
+			// Windows message so a Unix EIO error never misclassifies as a denial.
+			rx(`(?i)access is denied\.?\s*\(os error 5\)`),
+		},
 	},
 }
 
