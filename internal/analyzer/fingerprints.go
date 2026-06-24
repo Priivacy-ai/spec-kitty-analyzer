@@ -315,7 +315,21 @@ var failureRules = []failureRule{
 		title:    "Permission denied",
 		severity: "medium",
 		recovery: "Fix file permissions, executable bits, or credential access before retrying.",
-		patterns: []*regexp.Regexp{rx(`(?i)\bpermission denied\b`)},
+		// A real denial appears as a *structured* error line — a tool/path token
+		// immediately followed by `: permission denied` ("ls: ...: Permission
+		// denied", "open /x: permission denied", "EACCES: permission denied",
+		// "bash: x: permission denied") — or as a fixed runtime signature. Prose
+		// that merely discusses the phrase ("Filesystem error — permission denied,
+		// disk full, ..."), control flow (`except PermissionError`), doc vocabulary
+		// ("EACCES or EAGAIN"), and the analyzer's own "findings :: Permission
+		// denied" output all lack that `token: permission denied` shape, so they no
+		// longer match. The `[^\s:]` before the colon excludes the `::` self-output.
+		patterns: []*regexp.Regexp{
+			rx(`(?i)[^\s:]:\s+permission denied\b`),
+			rx(`\[Errno 13\] Permission denied`),
+			rx(`\(os error 13\)`),
+			rx(`(?i)Permission denied \(publickey`),
+		},
 	},
 }
 

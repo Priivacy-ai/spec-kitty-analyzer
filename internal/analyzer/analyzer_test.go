@@ -127,6 +127,48 @@ func TestBranchWorktreeAndMergeFingerprints(t *testing.T) {
 	}
 }
 
+func TestPermissionDeniedFingerprintPrecision(t *testing.T) {
+	positives := []string{
+		// Structured tool/runtime error lines (the dominant real form).
+		"ls: cannot open directory '/root': Permission denied",
+		"open /etc/hosts: permission denied",
+		"Error: EACCES: permission denied, open '/foo'",
+		"bash: ./deploy.sh: Permission denied",
+		// Fixed runtime signatures.
+		"OSError: [Errno 13] Permission denied: '/etc/hosts'",
+		"PermissionError: [Errno 13] Permission denied",
+		"failed to write file (os error 13)",
+		"git@github.com: Permission denied (publickey).",
+	}
+	for _, text := range positives {
+		failures := classifyFailures(text, nil, nil)
+		if !failureListHas(failures, "permission_denied") {
+			t.Errorf("text %q: failures=%#v want permission_denied", text, failures)
+		}
+	}
+
+	// Prose, control flow, and doc vocabulary that merely *discuss* the phrase must
+	// NOT classify as a real denial. Every case below is a real false positive
+	// observed in harness logs against the prior rules (em-dash prose, parenthetical
+	// lists, `except` control flow, EACCES-as-vocabulary, string literals, and the
+	// analyzer's own "findings :: Permission denied" output).
+	negatives := []string{
+		"Filesystem error — permission denied, disk full, cross-filesystem rename",
+		"Exit code 2 contract: handle filesystem errors such as permission denied gracefully.",
+		"if the write fails (disk full, permission denied), log the event",
+		"    except PermissionError as e:",
+		"documents flock(LOCK_NB) contention as EACCES or EAGAIN",
+		`_completed(1, stderr="permission denied"),`,
+		"/timeline/18/failures :: Permission denied",
+	}
+	for _, text := range negatives {
+		failures := classifyFailures(text, nil, nil)
+		if failureListHas(failures, "permission_denied") {
+			t.Errorf("prose %q: failures=%#v want no permission_denied", text, failures)
+		}
+	}
+}
+
 func TestStructuredOpContextDoesNotBecomeGenericFailure(t *testing.T) {
 	stringResult := map[string]any{
 		"toolUseResult": `{"invocation_id":"01KOP","profile_id":"python-pedro","action":"generate","governance_context_text":"Handle command failure carefully."}`,
