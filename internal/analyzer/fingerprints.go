@@ -315,11 +315,23 @@ var failureRules = []failureRule{
 		title:    "Permission denied",
 		severity: "medium",
 		recovery: "Fix file permissions, executable bits, or credential access before retrying.",
+		// A real denial appears as a *structured* error line — a tool/path token
+		// immediately followed by `: permission denied` ("ls: ...: Permission
+		// denied", "open /x: permission denied", "EACCES: permission denied",
+		// "bash: x: permission denied") — or as a fixed runtime signature. Prose
+		// that merely discusses the phrase ("Filesystem error — permission denied,
+		// disk full, ..."), control flow (`except PermissionError`), doc vocabulary
+		// ("EACCES or EAGAIN"), and the analyzer's own "findings :: Permission
+		// denied" output all lack that `token: permission denied` shape, so they no
+		// longer match. The `[^\s:]` before the colon excludes the `::` self-output.
 		patterns: []*regexp.Regexp{
-			rx(`(?i)\bpermission denied\b`),
+			rx(`(?i)[^\s:]:\s+permission denied\b`),
+			rx(`\[Errno 13\] Permission denied`),
+			rx(`\(os error 13\)`),
+			rx(`(?i)Permission denied \(publickey`),
 			// Windows-native access-denied signatures (issue #3). Windows reports
 			// ERROR_ACCESS_DENIED (code 5) as "Access is denied", which contains no
-			// "permission denied" substring, so the rule above never matches it.
+			// "permission denied" substring, so the rules above never match it.
 			rx(`\[WinError 5\]`), // Python: PermissionError: [WinError 5] Access is denied
 			// Rust std::io::Error Display is "{message} (os error {code})" with the
 			// raw platform errno. On Windows code 5 == ERROR_ACCESS_DENIED, but on
