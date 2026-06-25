@@ -1,0 +1,100 @@
+schema_version: "1.0.0"
+mission: "software-dev"
+profile: "comprehensive"
+answers:
+  project_intent: >-
+    Turn Spec Kitty mission artifacts, kitty-ops records, and agent
+    transcript/log files into one deterministic timeline, and detect documented
+    failure modes with recovery guidance — surfacing what actually happened in a
+    mission, including failures the event log itself is blind to. The core user
+    outcome is to generate accurate, reportable, actionable information on
+    failure modes that the user can use to guide local corrective actions or to
+    report back to the Spec Kitty project. This is a product
+    customer-supportability and product-feedback tool that plays an important
+    role in scaling the customer base and product-quality efforts.
+  languages_frameworks: >-
+    Go 1.25+ compiled to a single static CLI binary (Go is not required on the
+    machine where the tool is installed or run). One dependency: go-pdf/fpdf for
+    PDF report generation. Local-first parsing borrowed from agent-log-analyzer:
+    redaction, JSONL/text fallback parsing, recursive JSON flattening,
+    signature-style detection, and multi-format report generation (JSON, MD,
+    HTML, PDF).
+  testing_requirements: >-
+    Go unit tests with real-format fixtures in testdata/. `go build ./...`,
+    `go vet ./...`, and `go test ./...` must all pass. Detection and heuristic
+    changes must be validated against a real log corpus in both directions —
+    false positives (did we start flagging noise?) and false negatives (did we
+    stop catching real events?) — not only against synthetic fixtures.
+  quality_gates: >-
+    Local `go build && go vet && go test ./...` green before every merge. The
+    repository has no PR CI (only a release workflow on v* tags), so local
+    verification is the substitute gate; the GitHub Revert button is the undo
+    path. Self-review of the diff before merge, and corpus-validation evidence
+    recorded in the PR for detection changes. Features, changes, and fixes must
+    be behavior-validated against real Spec Kitty implementations, not only
+    against fixtures or assumptions.
+  review_policy: >-
+    Maintainer-led. Solicit a colleague review before merging; the maintainer
+    owns the merge button after review. No direct pushes to main and no
+    force-push. Contributions may come from other Spec Kitty team members or
+    customers — external contributors branch and open a PR from a fork and
+    follow CONTRIBUTING.
+  performance_targets: >-
+    Deterministic and fast on real corpora — a single analyze run over hundreds
+    of logs and missions completes in a few seconds. There is no hard SLA;
+    correctness and determinism outrank raw speed.
+  deployment_constraints: >-
+    Distributed as prebuilt native binaries via GitHub Releases (release
+    workflow triggered on v* tags); Go is not required to install or run.
+    Cross-platform: macOS, Linux, and Windows. Local-first: no telemetry, and
+    ingested logs never leave the user's machine.
+  documentation_policy: >-
+    README and docs/ are kept in sync with shipped CLI behavior; every new
+    failure-mode detector is documented together with its recovery guidance.
+    Automatically maintain customer-facing documentation that makes clear the
+    tool's purpose, usage, interpretation of results, and reporting options.
+    Maintain a CHANGELOG using the same standards Spec Kitty uses (and,
+    eventually, a parallel mechanism to Spec Kitty's). Maintain a CONTRIBUTING
+    document detailing requirements, standard operating procedures, standards,
+    and preferences, with explicit callouts for (a) an AI-assisted-contribution
+    disclaimer and (b) a guard requiring discussion before large changes.
+    Directional, not a hard gate: vector toward Divio documentation standards
+    (tutorials, how-to guides, reference, explanation) as the scope warrants;
+    the four Divio modes map onto the customer-facing goal (purpose as
+    explanation, usage as tutorial/how-to, interpretation as
+    reference/explanation, reporting as how-to).
+  risk_boundaries: >-
+    Privacy is non-negotiable: redaction must strip secrets from ingested logs,
+    the tool is local-first, and it must never exfiltrate log contents. Adopt
+    fail-safe practices to the degree they apply to privacy — when uncertain,
+    default to not leaking. Detection precision matters: avoid false positives
+    that erode user trust, validated evidence-first against real corpora.
+  amendment_process: >-
+    Charter changes are proposed via PR like code and approved by the
+    maintainer.
+  exception_policy: >-
+    Exceptions to the charter are documented in the PR or commit with their
+    rationale; any deviation from a directive must be explicit, never silent.
+selected_paradigms:
+  - deep-module-design
+  - specification-by-example
+selected_directives:
+  - DIRECTIVE_001
+  - DIRECTIVE_003
+  - DIRECTIVE_024
+  - DIRECTIVE_025
+  - DIRECTIVE_029
+  - DIRECTIVE_030
+  - DIRECTIVE_033
+  - DIRECTIVE_034
+  - DIRECTIVE_036
+  - DIRECTIVE_039
+  - DIRECTIVE_040
+available_tools:
+  - spec-kitty
+  - git
+  - github
+  - go
+  - claude
+  - codex
+  - vs code

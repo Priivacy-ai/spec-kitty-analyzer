@@ -1,0 +1,12 @@
+project:
+  uuid: c0c408c0-66da-496c-aefe-221560dee3b2
+  slug: spec-kitty-analyzer
+  node_id: 2af64e2d9c0e
+  build_id: 1f66b556-8327-4435-9044-93a4d14d9e36
+vcs:
+  type: git
+agents:
+  available:
+  - claude
+  auto_commit: true
+  lint_on_edit: false
