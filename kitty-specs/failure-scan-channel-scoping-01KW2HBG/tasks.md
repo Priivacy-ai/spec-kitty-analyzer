@@ -64,12 +64,12 @@ mixed rules per §4, and run each pattern only against its scope's text.
 output-scoped narrative negative and the Class-B regression guard pass.
 
 ### Included subtasks
-- [ ] T007 Add explicit `scope` to the pattern type; scoped `failureRules` (WP02)
-- [ ] T008 Apply the §4 taxonomy (WP02)
-- [ ] T009 Rework `classifyFailures` to scan per-scope cached text; route `genericFailureSignal` through output (WP02)
-- [ ] T010 Explicit-scope build test (§7.1) (WP02)
-- [ ] T011 Output-scoped narrative negative test (§7.2b) (WP02)
-- [ ] T012 Class-B regression guard (§7.2) (WP02)
+- [x] T007 Add explicit `scope` to the pattern type; scoped `failureRules` (WP02)
+- [x] T008 Apply the §4 taxonomy (WP02)
+- [x] T009 Rework `classifyFailures` to scan per-scope cached text; route `genericFailureSignal` through output (WP02)
+- [x] T010 Explicit-scope build test (§7.1) (WP02)
+- [x] T011 Output-scoped narrative negative test (§7.2b) (WP02)
+- [x] T012 Class-B regression guard (§7.2) (WP02)
 
 **Implementation sketch:** in `internal/analyzer/fingerprints.go`, give each pattern a
 required `scope`; convert the `failureRules` table; rework `classifyFailures` to accept
