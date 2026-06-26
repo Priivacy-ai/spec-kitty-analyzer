@@ -14,7 +14,7 @@ requirement_refs:
 tracker_refs: []
 planning_base_branch: fix/failure-scan-channel-scoping
 merge_target_branch: fix/failure-scan-channel-scoping
-branch_strategy: already-confirmed
+branch_strategy: Planning artifacts for this mission were generated on fix/failure-scan-channel-scoping. During /spec-kitty.implement this WP may branch from a dependency-specific base, but completed changes must merge back into fix/failure-scan-channel-scoping unless the human explicitly redirects the landing branch.
 subtasks:
 - T013
 - T014
