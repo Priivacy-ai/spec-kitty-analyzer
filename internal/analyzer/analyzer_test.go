@@ -1,7 +1,9 @@
 package analyzer
 
 import (
+	"encoding/json"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 )
@@ -274,6 +276,315 @@ func TestWindowsPermissionDeniedSignatures(t *testing.T) {
 	eio := classifyFailures(`Error: Input/output error (os error 5)`, nil, nil)
 	if failureListHas(eio, "permission_denied") {
 		t.Fatalf("Unix EIO misclassified as permission_denied: failures=%#v", eio)
+	}
+}
+
+// TestIssue4FourWayReproThroughEvent is the headline acceptance test (Contract B).
+// The SAME signature `AssertionError` appears in four channels of an event; only the
+// stderr (output) line is a real failure once the event is wired through the channel
+// extraction (WP01) + scoped classification (WP02). This exercises the WP03 wiring
+// end to end via eventFromJSONObject (T014/T017a).
+func TestIssue4FourWayReproThroughEvent(t *testing.T) {
+	cases := []struct {
+		name     string
+		obj      map[string]any
+		wantFail bool
+		wantID   string
+	}{
+		{
+			name: "assistant_message_text_narrative",
+			obj: map[string]any{
+				"type": "assistant",
+				"message": map[string]any{
+					"role": "assistant",
+					"content": []any{
+						map[string]any{"type": "text", "text": "Catch the AssertionError and log it before re-raising."},
+					},
+				},
+			},
+			wantFail: false,
+		},
+		{
+			name: "edit_new_string_excluded",
+			obj: map[string]any{
+				"toolUseResult": map[string]any{
+					"filePath":        "/repo/tests/test_x.py",
+					"oldString":       "pass",
+					"newString":       "raise AssertionError('boom')",
+					"structuredPatch": []any{},
+				},
+			},
+			wantFail: false,
+		},
+		{
+			name: "codex_reasoning_narrative",
+			obj: map[string]any{
+				"payload": map[string]any{
+					"type": "reasoning",
+					"content": []any{
+						map[string]any{"type": "text", "text": "Handle AssertionError defensively in the harness."},
+					},
+				},
+			},
+			wantFail: false,
+		},
+		{
+			name: "tool_use_result_stderr_output",
+			obj: map[string]any{
+				"toolUseResult": map[string]any{
+					"stdout": "",
+					"stderr": "E       AssertionError: boom",
+				},
+			},
+			wantFail: true,
+			wantID:   "test_failure",
+		},
+	}
+	for _, c := range cases {
+		ev := eventFromJSONObject("session.jsonl", 1, 1, c.obj)
+		got := len(ev.Failures) > 0
+		if got != c.wantFail {
+			t.Errorf("%s: failures=%#v want failure=%v", c.name, ev.Failures, c.wantFail)
+			continue
+		}
+		if c.wantFail {
+			if len(ev.Failures) != 1 || ev.Failures[0].ID != c.wantID {
+				t.Errorf("%s: failures=%#v want exactly [%s]", c.name, ev.Failures, c.wantID)
+			}
+		}
+	}
+}
+
+// TestObjNilChannelRouting covers the §3d plain-text model (Contract D) plus the
+// generic-.log deferral, all through the event path (T015/T017b).
+func TestObjNilChannelRouting(t *testing.T) {
+	// Contract D row 1: an artifact/spec line that merely discusses an error must not
+	// surface as a failure. The text is output-eligible at the event level, but the
+	// single §5 suppression gate (skipArtifactMessage) drops it before aggregation.
+	artifactPath := "repo/kitty-specs/sample/research.md"
+	proseLine := "The pytest run reported AssertionError: boom and exited with exit code 1."
+	preGate := eventFromText(artifactPath, 1, 1, proseLine, nil)
+	if len(preGate.Failures) == 0 {
+		t.Fatalf("artifact prose should classify at the event level (output-eligible) pre-gate; got none")
+	}
+	if !skipArtifactMessage("mission_artifact", &preGate) {
+		t.Fatalf("single §5 gate must suppress the artifact prose failure: %#v", preGate.Failures)
+	}
+	events, _ := parseFile(artifactPath, "mission_artifact", []byte(proseLine+"\n"), 0, newBuildState())
+	for _, e := range events {
+		if len(e.Failures) > 0 {
+			t.Fatalf("artifact prose surfaced a failure end-to-end: %#v", e.Failures)
+		}
+	}
+
+	// The one whitelisted artifact signal — review_rejected on WP frontmatter — must
+	// still surface (artifactFailureWhitelist / retainWhitelistedArtifactFailures).
+	// This is the SC-003 guard the design's
+	// diagnostic-only routing would have regressed.
+	wpEvents, _ := parseFile("repo/kitty-specs/sample/tasks/WP01.md", "work_package", []byte("review_status: has_feedback\n"), 0, newBuildState())
+	foundReview := false
+	for _, e := range wpEvents {
+		if failureListHas(e.Failures, "review_rejected") {
+			foundReview = true
+		}
+	}
+	if !foundReview {
+		t.Fatalf("whitelisted review_rejected must survive on WP frontmatter; events=%#v", wpEvents)
+	}
+
+	// Contract D row 2: a transcript-derived stray non-JSON line carrying real output
+	// failure text is output-eligible and classifies.
+	out, diag := channelStringsForEvent("session.jsonl", "AssertionError: boom", nil)
+	if out == "" || diag == "" {
+		t.Fatalf("transcript stray line must be output-eligible; out=%q diag=%q", out, diag)
+	}
+	strayEv := eventFromText("session.jsonl", 1, 1, "AssertionError: boom", nil)
+	if !failureListHas(strayEv.Failures, "test_failure") {
+		t.Fatalf("transcript stray failure=%#v want test_failure", strayEv.Failures)
+	}
+
+	// §3d generic standalone .log/.txt: explicitly unsupported — empty channels, so the
+	// same failure text does not classify (documented deferral, not silent output).
+	gout, gdiag := channelStringsForEvent("build.log", "AssertionError: boom", nil)
+	if gout != "" || gdiag != "" {
+		t.Fatalf("generic .log must be unsupported (empty channels); out=%q diag=%q", gout, gdiag)
+	}
+	logEv := eventFromText("build.log", 1, 1, "AssertionError: boom", nil)
+	if len(logEv.Failures) != 0 {
+		t.Fatalf("generic .log must not classify (unsupported); got %#v", logEv.Failures)
+	}
+}
+
+// TestArtifactSuppressionAllFourKinds covers Codex cycle-2 Fix 1: artifact-failure
+// suppression must apply UNIFORMLY across all four artifact kinds, not just
+// work_package/mission_artifact. A mission_meta (meta.json) and a
+// mission_status_snapshot (status.json) each carrying a failure signature must reach
+// findings with ZERO failures. Pre-gate the same object classifies, proving the gate
+// (not a missing match) is what suppresses it.
+func TestArtifactSuppressionAllFourKinds(t *testing.T) {
+	cases := []struct {
+		name string
+		kind string
+		path string
+		data string
+	}{
+		{
+			name: "mission_meta",
+			kind: "mission_meta",
+			path: "repo/kitty-specs/sample/meta.json",
+			data: `{"error":"AssertionError: boom"}`,
+		},
+		{
+			name: "mission_status_snapshot",
+			kind: "mission_status_snapshot",
+			path: "repo/kitty-specs/sample/status.json",
+			data: `{"error":"AssertionError: boom"}`,
+		},
+	}
+	for _, c := range cases {
+		obj, ok := decodeJSONObject([]byte(c.data))
+		if !ok {
+			t.Fatalf("%s: test JSON did not decode", c.name)
+		}
+		preGate := eventFromJSONObject(c.path, 1, 1, obj)
+		if len(preGate.Failures) == 0 {
+			t.Fatalf("%s: object should classify a failure pre-gate (else the test proves nothing); got none", c.name)
+		}
+		events, _ := parseFile(c.path, c.kind, []byte(c.data+"\n"), 0, newBuildState())
+		for _, e := range events {
+			if len(e.Failures) > 0 {
+				t.Fatalf("%s: artifact kind leaked a failure end-to-end: %#v", c.name, e.Failures)
+			}
+		}
+	}
+}
+
+// TestArtifactPerFailureWhitelist covers Codex cycle-2 Fix 2: suppression is
+// per-failure, not all-or-nothing. An artifact event matching BOTH the whitelisted
+// review_rejected AND a non-whitelisted rule (test_failure) must keep EXACTLY
+// review_rejected — the other failure is dropped, not ridden through.
+func TestArtifactPerFailureWhitelist(t *testing.T) {
+	line := `review_status: has_feedback — AssertionError: boom`
+	wpPath := "repo/kitty-specs/sample/tasks/WP02.md"
+
+	// Pre-gate the event carries BOTH failures, proving the filter (not a missing
+	// match) is what removes test_failure.
+	preGate := eventFromText(wpPath, 1, 1, line, nil)
+	if !failureListHas(preGate.Failures, "review_rejected") || !failureListHas(preGate.Failures, "test_failure") {
+		t.Fatalf("pre-gate event must carry both review_rejected and test_failure; got %#v", preGate.Failures)
+	}
+
+	events, _ := parseFile(wpPath, "work_package", []byte(line+"\n"), 0, newBuildState())
+	var got []FailureFingerprint
+	for _, e := range events {
+		got = append(got, e.Failures...)
+	}
+	if len(got) != 1 || got[0].ID != "review_rejected" {
+		t.Fatalf("exactly review_rejected must survive per-failure whitelist; got %#v", got)
+	}
+}
+
+// TestArtifactTitleRecomputedAfterFilter covers cycle-3 Fix 1: event.Title is
+// derived from the PRE-filter failures[0] (titleForEvent / titleForKind) BEFORE the
+// per-failure artifact whitelist runs in skipArtifactMessage. When the dropped
+// failure is EARLIER-ordered than the surviving review_rejected, the stale title
+// names the dropped failure while event.Failures lists only review_rejected. After
+// parseFile the surviving event must carry EXACTLY review_rejected AND a title that
+// corresponds to review_rejected — proving the gate recomputed the title.
+func TestArtifactTitleRecomputedAfterFilter(t *testing.T) {
+	// guard_failure is the FIRST rule in failureRules (fingerprints.go), defined well
+	// before review_rejected, so the pre-filter failures[0] is guard_failure and the
+	// pre-gate title is its rule title ("Runtime guard failure").
+	line := `review_status: has_feedback — guard failure blocked the ref advance`
+	wpPath := "repo/kitty-specs/sample/tasks/WP03.md"
+
+	// Pre-gate: the event carries BOTH failures, the earlier-ordered guard_failure is
+	// failures[0], and the title comes from that (soon-to-be-dropped) failure.
+	preGate := eventFromText(wpPath, 1, 1, line, nil)
+	if !failureListHas(preGate.Failures, "review_rejected") || !failureListHas(preGate.Failures, "guard_failure") {
+		t.Fatalf("pre-gate event must carry both review_rejected and guard_failure; got %#v", preGate.Failures)
+	}
+	if preGate.Failures[0].ID != "guard_failure" {
+		t.Fatalf("pre-filter failures[0] must be the earlier-ordered guard_failure (so the title is stale); got %#v", preGate.Failures)
+	}
+	if preGate.Title != "Runtime guard failure" {
+		t.Fatalf("pre-gate title must come from the dropped guard_failure; got %q", preGate.Title)
+	}
+
+	events, _ := parseFile(wpPath, "work_package", []byte(line+"\n"), 0, newBuildState())
+	var surviving []TimelineEvent
+	for _, e := range events {
+		if len(e.Failures) > 0 {
+			surviving = append(surviving, e)
+		}
+	}
+	if len(surviving) != 1 {
+		t.Fatalf("exactly one surviving failure event expected; got %#v", surviving)
+	}
+	e := surviving[0]
+	if len(e.Failures) != 1 || e.Failures[0].ID != "review_rejected" {
+		t.Fatalf("exactly review_rejected must survive; got %#v", e.Failures)
+	}
+	if e.Title != "Review rejected work package" {
+		t.Fatalf("title must be recomputed to match surviving review_rejected, not the dropped guard_failure; got %q", e.Title)
+	}
+}
+
+// TestContractCThroughEvent confirms the no-regression invariant (Contract C / SC-002)
+// through the event path: the distinctive branch_worktree_confusion narrative still
+// classifies (diagnostic-scoped), while generic output-scoped prose in narrative does
+// not, and the same signature in command output does (T017c).
+func TestContractCThroughEvent(t *testing.T) {
+	narrative := func(text string) map[string]any {
+		return map[string]any{
+			"message": map[string]any{
+				"content": []any{map[string]any{"type": "text", "text": text}},
+			},
+		}
+	}
+
+	// Distinctive branch_worktree_confusion narrative → still classified (diagnostic).
+	bwc := eventFromJSONObject("session.jsonl", 1, 1, narrative(
+		"You are on branch 'fix/foo' but the mission targets the 'main' branch. No auto-detection is performed for the branch."))
+	if !failureListHas(bwc.Failures, "branch_worktree_confusion") {
+		t.Fatalf("narrative branch_worktree_confusion regressed: %#v", bwc.Failures)
+	}
+
+	// Generic output-scoped prose in narrative → NOT classified (merge_operation_failed
+	// and merge_conflict are output-scoped; narrative is not output).
+	mergeProse := eventFromJSONObject("session.jsonl", 1, 1, narrative(
+		"The merge failed earlier so let us resolve the merge conflict next."))
+	if len(mergeProse.Failures) != 0 {
+		t.Fatalf("generic merge prose in narrative must not classify: %#v", mergeProse.Failures)
+	}
+
+	// CONFLICT in command output → classified (output-scoped).
+	conflictOut := eventFromJSONObject("session.jsonl", 1, 1, map[string]any{
+		"toolUseResult": map[string]any{"stdout": "Auto-merging x\nCONFLICT (content): Merge conflict in x\n", "stderr": ""},
+	})
+	if !failureListHas(conflictOut.Failures, "merge_conflict") {
+		t.Fatalf("CONFLICT in output must classify merge_conflict: %#v", conflictOut.Failures)
+	}
+}
+
+// TestChannelCacheNotSerialized pins NFR-003: the cached channel strings are
+// in-memory only and never leak into the serialized report schema.
+func TestChannelCacheNotSerialized(t *testing.T) {
+	ev := eventFromJSONObject("session.jsonl", 1, 1, map[string]any{
+		"toolUseResult": map[string]any{"stderr": "AssertionError: boom"},
+	})
+	if ev.outputCh == "" || ev.diagnosticCh == "" {
+		t.Fatalf("expected cached channel strings populated; outputCh=%q diagnosticCh=%q", ev.outputCh, ev.diagnosticCh)
+	}
+	b, err := json.Marshal(ev)
+	if err != nil {
+		t.Fatalf("marshal failed: %v", err)
+	}
+	s := string(b)
+	for _, leak := range []string{"outputCh", "diagnosticCh", "output_text", "diagnostic_text", "outputText", "diagnosticText"} {
+		if strings.Contains(s, leak) {
+			t.Fatalf("serialized event leaked channel cache key %q: %s", leak, s)
+		}
 	}
 }
 

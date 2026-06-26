@@ -22,8 +22,8 @@ subtasks:
 - T006
 phase: Phase 1 - Foundation
 assignee: ''
-agent: claude
-shell_pid: '96576'
+agent: "claude:opus:reviewer-renata:reviewer"
+shell_pid: "57156"
 history:
 - at: '2026-06-26T18:05:00Z'
   actor: system
@@ -158,3 +158,13 @@ behavior change yet**; it provides the two strings WP02/WP03 will consume.
 ## Activity Log
 
 - 2026-06-26T18:05:00Z – system – Prompt created.
+- 2026-06-26T19:41:04Z – user – shell_pid=96576 – Moved to planned
+- 2026-06-26T19:41:16Z – claude:opus:implementer-ivan:implementer – shell_pid=11530 – Started implementation via action command
+- 2026-06-26T19:43:54Z – claude:opus:implementer-ivan:implementer – shell_pid=11530 – Codex review fixes applied (tool_result output, codex drift logging, tests)
+- 2026-06-26T19:44:37Z – claude:opus:reviewer-renata:reviewer – shell_pid=12902 – Started review via action command
+- 2026-06-26T19:47:14Z – user – shell_pid=12902 – Cycle-2 Codex fixes verified (supersedes review-cycle-1.md): tool_result reads content+output keys, codex known-type schema-drift logging+exclusion, captureStderr+golden tests. build/vet/test green, gofmt clean, scope clean.
+- 2026-06-26T21:39:26Z – user – shell_pid=12902 – Moved to planned
+- 2026-06-26T21:39:31Z – claude:opus:implementer-ivan:implementer – shell_pid=55807 – Started implementation via action command
+- 2026-06-26T21:41:26Z – claude:opus:implementer-ivan:implementer – shell_pid=55807 – Holistic recall fix: top-level string message → narrative
+- 2026-06-26T21:42:12Z – claude:opus:reviewer-renata:reviewer – shell_pid=57156 – Started review via action command
+- 2026-06-26T21:43:52Z – user – shell_pid=57156 – Cycle 3 holistic recall fix verified: top-level string message → narrative (supersedes review-cycle-2.md; stale artifact override)

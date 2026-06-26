@@ -21,8 +21,8 @@ subtasks:
 - T012
 phase: Phase 2 - Rules
 assignee: ''
-agent: claude
-shell_pid: '1185'
+agent: "claude:opus:reviewer-renata:reviewer"
+shell_pid: "16579"
 history:
 - at: '2026-06-26T18:05:00Z'
   actor: system
@@ -150,3 +150,8 @@ and `classifyFailures` scans each pattern only against the text for its scope.
 ## Activity Log
 
 - 2026-06-26T18:05:00Z – system – Prompt created.
+- 2026-06-26T19:47:56Z – user – shell_pid=1185 – Moved to planned
+- 2026-06-26T19:48:01Z – claude:opus:implementer-ivan:implementer – shell_pid=14266 – Started implementation via action command
+- 2026-06-26T19:52:56Z – claude:opus:implementer-ivan:implementer – shell_pid=14266 – Codex cycle-2 fixes: branch distinctiveness split + real exclusion test
+- 2026-06-26T19:53:48Z – claude:opus:reviewer-renata:reviewer – shell_pid=16579 – Started review via action command
+- 2026-06-26T19:56:38Z – user – shell_pid=16579 – Cycle-2 Codex fixes verified: branch distinctiveness split (broad prose demoted to output, distinctive signatures stay diagnostic) + real end-to-end §3a exclusion tests; cycle-1 rejection superseded

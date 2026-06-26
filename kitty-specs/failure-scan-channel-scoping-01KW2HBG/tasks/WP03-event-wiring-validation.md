@@ -25,8 +25,8 @@ subtasks:
 - T019
 phase: Phase 3 - Integration & validation
 assignee: ''
-agent: claude
-shell_pid: '7526'
+agent: "claude:opus:reviewer-renata:reviewer"
+shell_pid: "52829"
 history:
 - at: '2026-06-26T18:05:00Z'
   actor: system
@@ -157,3 +157,17 @@ charter-required corpus evidence. This WP turns the foundation (WP01) + scoped r
 ## Activity Log
 
 - 2026-06-26T18:05:00Z – system – Prompt created.
+- 2026-06-26T19:57:31Z – claude:opus:implementer-ivan:implementer – shell_pid=18036 – Assigned agent via action command
+- 2026-06-26T21:07:02Z – claude:opus:implementer-ivan:implementer – shell_pid=18036 – Wiring + obj==nil + ordering; corpus -46% FP, SC-003 holds, branch 10->2 accepted (8 were FPs). Commit 851c1da
+- 2026-06-26T21:07:18Z – claude:opus:reviewer-renata:reviewer – shell_pid=43542 – Started review via action command
+- 2026-06-26T21:10:21Z – user – shell_pid=43542 – Capstone verified: wiring, §3d (review_rejected-preserving deviation sound), ordering, acceptance + corpus
+- 2026-06-26T21:15:22Z – user – shell_pid=43542 – Moved to planned
+- 2026-06-26T21:15:27Z – claude:opus:implementer-ivan:implementer – shell_pid=46430 – Started implementation via action command
+- 2026-06-26T21:20:12Z – claude:opus:implementer-ivan:implementer – shell_pid=46430 – Codex cycle-2: uniform artifact suppression + per-failure whitelist + dedup extraction
+- 2026-06-26T21:21:51Z – claude:opus:reviewer-renata:reviewer – shell_pid=48953 – Started review via action command
+- 2026-06-26T21:24:10Z – user – shell_pid=48953 – Cycle-2 Codex fixes verified: uniform artifact suppression (4 kinds) + per-failure whitelist + single extraction. Stale review-cycle-1.md gate overridden; cycle-2 review passed.
+- 2026-06-26T21:26:30Z – user – shell_pid=48953 – Moved to planned
+- 2026-06-26T21:26:35Z – claude:opus:implementer-ivan:implementer – shell_pid=50910 – Started implementation via action command
+- 2026-06-26T21:30:22Z – claude:opus:implementer-ivan:implementer – shell_pid=50910 – Cycle 3: title-recompute after artifact filter + comment cleanup
+- 2026-06-26T21:31:03Z – claude:opus:reviewer-renata:reviewer – shell_pid=52829 – Started review via action command
+- 2026-06-26T21:32:46Z – user – shell_pid=52829 – Cycle 3 verified: title recompute after artifact filter + comment cleanup. Stale review-cycle-2.md gate overridden (addressed by cycle-3 commit 4d86584).

@@ -230,7 +230,7 @@ func parseFile(path, kind string, data []byte, startTurn int, state *buildState)
 	if strings.HasSuffix(strings.ToLower(path), ".json") {
 		if obj, ok := decodeJSONObject(bytes.TrimSpace(data)); ok {
 			event := eventFromJSONObject(path, 1, startTurn+1, obj)
-			if event.Kind != "" && !skipArtifactMessage(kind, event) {
+			if event.Kind != "" && !skipArtifactMessage(kind, &event) {
 				return []TimelineEvent{event}, startTurn + 1
 			}
 		}
@@ -248,13 +248,19 @@ func parseFile(path, kind string, data []byte, startTurn int, state *buildState)
 			continue
 		}
 		turn++
+		var event TimelineEvent
 		if obj, ok := decodeJSONObject(raw); ok {
-			events = append(events, eventFromJSONObject(path, lineNo, turn, obj))
-			continue
+			event = eventFromJSONObject(path, lineNo, turn, obj)
+		} else {
+			event = eventFromText(path, lineNo, turn, string(raw), nil)
 		}
-		text := string(raw)
-		event := eventFromText(path, lineNo, turn, text, nil)
-		if event.Kind != "" && !skipArtifactMessage(kind, event) {
+		// Single suppression gate (design issue-4 §5): every parseFile event — JSON
+		// object line or plain text line — passes through skipArtifactMessage once,
+		// before it joins the timeline / findings aggregation. (Previously the JSON
+		// object-line branch bypassed the gate, so an artifact .md carrying a JSON
+		// line could leak a suppressed failure; routing both branches through the
+		// same predicate closes that and matches the §5 single-gate intent.)
+		if event.Kind != "" && !skipArtifactMessage(kind, &event) {
 			events = append(events, event)
 		}
 	}
@@ -282,29 +288,73 @@ func eventFromJSONObject(path string, line, turn int, obj map[string]any) Timeli
 	return event
 }
 
-func skipArtifactMessage(kind string, event TimelineEvent) bool {
-	switch kind {
-	case "work_package", "mission_artifact", "mission_meta", "mission_status_snapshot":
-		if event.Kind == "message" {
-			return true
-		}
-		if (kind == "work_package" || kind == "mission_artifact") && len(event.Failures) > 0 {
-			return !artifactFailureAllowed(event)
-		}
-		return false
-	default:
+// skipArtifactMessage is the SINGLE suppression gate (design issue-4 §5). It is
+// applied once per event in parseFile, AFTER classification and BEFORE the event
+// reaches the timeline (and thus before findings aggregation in buildFindings), so
+// an artifact/spec event never contributes a failure to the roll-up. The same gate
+// point will later also gate Tier-3 anomalies (separate PR); routing every parseFile
+// event through this one predicate keeps that future gating in lock-step.
+//
+// It drops (a) plain artifact "message" noise and (b) every non-whitelisted
+// artifact-derived failure, applied UNIFORMLY across all four artifact kinds
+// (work_package, mission_artifact, mission_meta, mission_status_snapshot — the set
+// isArtifactKind keys on). Suppression is PER-FAILURE, not per-event: for an
+// artifact event carrying failures, event.Failures is filtered down to the
+// whitelisted IDs (artifactFailureWhitelist) in place; the rest are dropped. If no
+// whitelisted failure remains, the event is suppressed entirely (return true), so it
+// contributes nothing to findings. This is why the event is taken by pointer — the
+// filtered slice must be observed by the caller before aggregation.
+//
+// The whitelist intentionally surfaces review_rejected (an output-scoped TEXT rule
+// on WP `review_status:` frontmatter); see channelStringsForEvent's artifact branch.
+func skipArtifactMessage(kind string, event *TimelineEvent) bool {
+	if !isArtifactKind(kind) {
 		return false
 	}
-}
-
-func artifactFailureAllowed(event TimelineEvent) bool {
-	for _, failure := range event.Failures {
-		switch failure.ID {
-		case "review_rejected":
+	if event.Kind == "message" {
+		return true
+	}
+	if len(event.Failures) > 0 {
+		before := len(event.Failures)
+		event.Failures = retainWhitelistedArtifactFailures(event.Failures)
+		if len(event.Failures) == 0 {
 			return true
+		}
+		// event.Title was derived from the pre-filter failures[0] (titleForEvent /
+		// titleForKind) BEFORE this gate ran. If the filter dropped any failure but
+		// at least one survives, that title may now name a dropped failure while
+		// event.Failures lists only the whitelisted ones. Recompute the title from
+		// the surviving failures so it stays in sync with failures[0]. Only fires on
+		// the changed-and-non-empty artifact case: non-artifact events short-circuit
+		// above, the fully-suppressed case already returned, and an unchanged filter
+		// (before == len) leaves the title untouched.
+		if len(event.Failures) != before {
+			event.Title = titleForEvent(*event)
 		}
 	}
 	return false
+}
+
+// artifactFailureWhitelist is the single source of truth for which failure IDs the
+// analyzer intentionally surfaces from artifact-kind sources. Today only
+// review_rejected (WP `review_status:` frontmatter) is whitelisted; every other
+// artifact-derived failure is suppressed before findings aggregation.
+var artifactFailureWhitelist = map[string]bool{
+	"review_rejected": true,
+}
+
+// retainWhitelistedArtifactFailures returns the failures whose IDs are in
+// artifactFailureWhitelist, preserving source order. Non-whitelisted artifact
+// failures are dropped per-failure (so an event matching both review_rejected and
+// another rule keeps only review_rejected).
+func retainWhitelistedArtifactFailures(failures []FailureFingerprint) []FailureFingerprint {
+	kept := failures[:0]
+	for _, f := range failures {
+		if artifactFailureWhitelist[f.ID] {
+			kept = append(kept, f)
+		}
+	}
+	return kept
 }
 
 func eventFromText(path string, line, turn int, text string, obj map[string]any) TimelineEvent {
@@ -317,7 +367,20 @@ func eventFromText(path string, line, turn int, text string, obj map[string]any)
 	if scope.Action == "" {
 		scope.Action = action
 	}
-	failures := classifyFailures(text, obj, cli)
+
+	// Classification ordering (design issue-4 §5), made explicit here:
+	//   (1) the §3a code-edit/file-read exclusion + §3c channel extraction happen
+	//       in channelStringsForEvent (once per event, not per rule), producing the
+	//       two cached strings;
+	//   (2) structural obj-field rules run first inside classifyFailuresWithChannels;
+	//   (3) per-pattern text rules then match each cached string for the pattern's
+	//       scope (output-scoped → outputCh, diagnostic-scoped → diagnosticCh);
+	//   (4) the generic_error fallback runs last, over outputCh only.
+	// The single skipArtifactMessage suppression gate (parseFile) is applied AFTER
+	// this returns, before findings aggregation — see channelStringsForEvent and the
+	// parseFile gate comment.
+	outCh, diagCh := channelStringsForEvent(path, text, obj)
+	failures := classifyFailuresWithChannels(outCh, diagCh, obj, cli)
 	kind := "message"
 	switch {
 	case len(failures) > 0:
@@ -348,6 +411,93 @@ func eventFromText(path string, line, turn int, text string, obj map[string]any)
 		Skills:         skills,
 		AgentProfiles:  profiles,
 		Failures:       failures,
+		outputCh:       outCh,
+		diagnosticCh:   diagCh,
+	}
+}
+
+// channelStringsForEvent computes the (output, diagnostic) channel strings for one
+// event, once per event rather than once per failure rule (design issue-4 §3c/§3d,
+// §5; NFR-002 — the cost is the channel extraction, not O(rules × object size)).
+//
+//   - obj != nil: derive both channels from the typed §3c extraction (channels.go,
+//     WP01), which already applies the §3a code-edit/file-read exclusion. A code edit
+//     or file read therefore contributes to NEITHER string.
+//   - obj == nil: the line is raw, non-JSON text with no harness structure to route,
+//     so resolve it by SOURCE KIND (§3d), not by content.
+func channelStringsForEvent(path, text string, obj map[string]any) (outCh, diagCh string) {
+	if obj != nil {
+		// §3c typed extraction (WP01) — already applies the §3a code-edit/file-read
+		// exclusion, so a code edit or file read reaches NEITHER channel. Call the
+		// extraction ONCE and derive both cached strings from the single result: a
+		// repeated outputText+diagnosticText pair would walk the object twice and emit
+		// the channels.go "unmapped event shape" stderr log twice for one event. The
+		// two strings are byte-identical to the old two-call results: outputText joins
+		// ct.output; diagnosticText joins ct.output followed by ct.narrative.
+		ct := extractChannels(obj)
+		outCh = strings.Join(ct.output, " ")
+		diagFrags := make([]string, 0, len(ct.output)+len(ct.narrative))
+		diagFrags = append(diagFrags, ct.output...)
+		diagFrags = append(diagFrags, ct.narrative...)
+		diagCh = strings.Join(diagFrags, " ")
+		return outCh, diagCh
+	}
+
+	// §3d plain-text model: a raw, non-JSON line has no harness structure to route,
+	// so resolve it by SOURCE KIND (classifyPathKind), not by content.
+	switch kind := classifyPathKind(path); {
+	case kind == "text":
+		// Generic standalone .log/.txt command-output files (classifyPathKind ==
+		// "text": a bare build.log / notes.txt / .md / .yaml outside kitty-specs) are
+		// EXPLICITLY UNSUPPORTED for now (§3d). There is no source kind that proves
+		// the bytes are command output, and silently treating them as output would
+		// reopen the false-positive class this mission closes. Until a dedicated
+		// `command_log` source kind is introduced (a later change) they contribute no
+		// channel text and are not classified — documented here, not silently
+		// mishandled. Corpus-validated: the sampled missions produce zero failures
+		// from "text"-kind sources, so this deferral drops no true positive (SC-003).
+		return "", ""
+
+	case isArtifactKind(kind):
+		// Artifact/spec prose (spec/plan/research/WP markdown, mission meta/status
+		// snapshots). §3d's goal is that artifact prose must NOT surface as a failure
+		// finding. We achieve that goal at the SINGLE §5 suppression gate
+		// (skipArtifactMessage), which drops every non-allowed artifact failure before
+		// findings aggregation, rather than by zeroing the output channel here.
+		//
+		// Rationale for not zeroing output ("diagnostic-only") at this layer: the one
+		// artifact signal the system intentionally keeps — review_rejected, via the
+		// artifactFailureWhitelist (retainWhitelistedArtifactFailures) — is an
+		// OUTPUT-scoped TEXT rule
+		// (fingerprints.go) that fires on WP `review_status:` frontmatter. Design §4
+		// assumed review_rejected was structural; it is not. Zeroing the output
+		// channel for artifact text would silently stop review_rejected matching and
+		// drop a true positive (SC-002/SC-003 regression; it also breaks the fixture).
+		// Keeping artifact text output-eligible and letting the single gate suppress
+		// the rest yields §3d's observable result (no artifact prose in findings)
+		// while preserving review_rejected. (A cleaner future refactor: scope
+		// review_rejected as diagnostic/structural in fingerprints.go, after which
+		// channel-level diagnostic-only routing becomes safe.)
+		return text, text
+
+	default:
+		// Transcript-derived stray non-JSON line (a rare line in a .jsonl event log
+		// that did not parse as an object): best-effort OUTPUT-ELIGIBLE — treat the
+		// raw bytes as both output and narrative (Contract D, second row).
+		return text, text
+	}
+}
+
+// isArtifactKind reports whether a source kind is a non-transcript artifact/spec
+// kind whose plain text is prose, not command output (design issue-4 §3d). This is
+// the SAME set the skipArtifactMessage suppression gate keys on; both call this
+// helper so the artifact-kind definition lives in one place and cannot drift.
+func isArtifactKind(kind string) bool {
+	switch kind {
+	case "work_package", "mission_artifact", "mission_meta", "mission_status_snapshot":
+		return true
+	default:
+		return false
 	}
 }
 
