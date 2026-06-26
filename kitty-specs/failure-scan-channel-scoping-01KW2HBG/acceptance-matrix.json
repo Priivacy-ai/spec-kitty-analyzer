@@ -2,67 +2,67 @@
   "mission_slug": "failure-scan-channel-scoping-01KW2HBG",
   "mission_number": "",
   "mission_type": "software-dev",
-  "overall_verdict": "pending",
+  "overall_verdict": "pass",
   "criteria": [
     {
       "criterion_id": "FR-001",
-      "description": "Verify FR-001 is satisfied",
+      "description": "Failures are reported only when the signature appears in a genuine output channel or a distinctive diagnostic signal — never solely in narrative, code-edit, or file-read content.",
       "proof_type": "automated_test",
-      "evidence": null,
-      "pass_fail": "pending",
-      "verified_by": null,
-      "verified_at": null,
-      "notes": "TODO: replace with a real acceptance criterion"
+      "evidence": "TestIssue4FourWayReproThroughEvent: assistant text / Edit newString / codex reasoning carrying 'AssertionError' do NOT classify; only toolUseResult.stderr classifies as test_failure. Corpus sweep (17 missions): total failures 781->422 (-46%) narrative/edit FP reduction.",
+      "pass_fail": "pass",
+      "verified_by": "kent (maintainer) via Claude orchestration + adversarial Codex review",
+      "verified_at": "2026-06-26T20:35:00Z",
+      "notes": "Per-pattern channel scoping (WP02) + cached-channel event wiring (WP03)."
     },
     {
       "criterion_id": "FR-002",
-      "description": "Verify FR-002 is satisfied",
+      "description": "Conditions that legitimately appear in narrative — specifically branch/worktree confusion — continue to be detected with no loss vs. current behavior.",
       "proof_type": "automated_test",
-      "evidence": null,
-      "pass_fail": "pending",
-      "verified_by": null,
-      "verified_at": null,
-      "notes": "TODO: replace with a real acceptance criterion"
+      "evidence": "TestContractCThroughEvent + TestFingerprintBranchWorktreeDiagnosticScope: distinctive branch_worktree_confusion signature in narrative still classifies (diagnostic scope). Corpus finalize-inbox: the 2 genuine narrative topology detections (#1716/#2046) are preserved (10->2; the 8 dropped were verified FPs: edits/tool-inputs/TodoWrite attachments).",
+      "pass_fail": "pass",
+      "verified_by": "kent (maintainer) via Claude orchestration + channel decomposition",
+      "verified_at": "2026-06-26T20:35:00Z",
+      "notes": "Distinctiveness gate: only branch_worktree_confusion distinctive patterns are diagnostic-scoped."
     },
     {
       "criterion_id": "FR-003",
-      "description": "Verify FR-003 is satisfied",
+      "description": "Genuine failures present in command/tool output continue to be reported (no loss of true positives across the validation corpus).",
       "proof_type": "automated_test",
-      "evidence": null,
-      "pass_fail": "pending",
-      "verified_by": null,
-      "verified_at": null,
-      "notes": "TODO: replace with a real acceptance criterion"
+      "evidence": "Corpus SC-003 verified: no event that was a true failure before the change becomes unreported after. review_rejected 37->6 on credential-liveness decomposed — all drops are narrative/command FPs; real structured rejection artifacts survive via tool_result->output. Output-channel failures (CONFLICT, stderr) still classify (TestContractCThroughEvent).",
+      "pass_fail": "pass",
+      "verified_by": "kent (maintainer) via Claude orchestration + corpus decomposition",
+      "verified_at": "2026-06-26T20:35:00Z",
+      "notes": "SC-003 holds across the corpus sweep."
     },
     {
       "criterion_id": "FR-004",
-      "description": "Verify FR-004 is satisfied",
+      "description": "Plain-text artifact/spec content that only discusses errors is not classified as a failure.",
       "proof_type": "automated_test",
-      "evidence": null,
-      "pass_fail": "pending",
-      "verified_by": null,
-      "verified_at": null,
-      "notes": "TODO: replace with a real acceptance criterion"
+      "evidence": "TestObjNilChannelRouting (artifact/spec line discussing an error -> not a failure; transcript stray line -> output-eligible) + TestArtifactSuppressionAllFourKinds (work_package/mission_artifact/mission_meta/mission_status_snapshot failures suppressed before aggregation) + §3a exclusion tests (file-read/code-edit content never reaches a channel).",
+      "pass_fail": "pass",
+      "verified_by": "kent (maintainer) via Claude orchestration",
+      "verified_at": "2026-06-26T20:35:00Z",
+      "notes": "obj==nil §3d routing + single skipArtifactMessage gate (WP03)."
     },
     {
       "criterion_id": "FR-005",
-      "description": "Verify FR-005 is satisfied",
+      "description": "Output that genuinely contains a failure signature is still reported even if it also echoes/quotes failure text.",
       "proof_type": "automated_test",
-      "evidence": null,
-      "pass_fail": "pending",
-      "verified_by": null,
-      "verified_at": null,
-      "notes": "TODO: replace with a real acceptance criterion"
+      "evidence": "TestIssue4FourWayReproThroughEvent: toolUseResult.stderr = 'AssertionError: boom' classifies as test_failure (genuine output). Output-channel content is always scanned regardless of quoted text (design §8 residual is intentional and correct).",
+      "pass_fail": "pass",
+      "verified_by": "kent (maintainer) via Claude orchestration",
+      "verified_at": "2026-06-26T20:35:00Z",
+      "notes": "Output channel is authoritative; quoting is correctly reported."
     },
     {
       "criterion_id": "FR-006",
-      "description": "Verify FR-006 is satisfied",
+      "description": "Failure reporting remains deterministic: identical input logs yield identical classifications.",
       "proof_type": "automated_test",
-      "evidence": null,
-      "pass_fail": "pending",
-      "verified_by": null,
-      "verified_at": null,
-      "notes": "TODO: replace with a real acceptance criterion"
+      "evidence": "TestChannelDeterminism (sorted map keys, fixed fragment order; 5x loop) + explicit per-pattern scope with a build-time test (TestFingerprintRulesAllScoped) that fails if any pattern is unscoped (no implicit default). Single deterministic extraction pass per event.",
+      "pass_fail": "pass",
+      "verified_by": "kent (maintainer) via Claude orchestration",
+      "verified_at": "2026-06-26T20:35:00Z",
+      "notes": "Determinism asserted at the channel layer and enforced by the scope build-gate."
     }
   ],
   "negative_invariants": []
