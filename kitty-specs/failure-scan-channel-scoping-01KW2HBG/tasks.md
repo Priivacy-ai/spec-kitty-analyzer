@@ -42,12 +42,12 @@ the text rules will scan. Foundation; no behavior change to classification yet.
 output/narrative/excluded routing for every harness shape, built and passing in isolation.
 
 ### Included subtasks
-- [ ] T001 Define channel model + extraction entry points in `channels.go` (WP01)
-- [ ] T002 Implement per-harness extraction matrix (§3c) (WP01)
-- [ ] T003 Apply §3a universal exclusion (code-edit/file-read) (WP01)
-- [ ] T004 Recursive JSON re-decode + unmapped-shape logging (WP01)
-- [ ] T005 Golden tests per harness shape in `channels_test.go` (WP01)
-- [ ] T006 Structural-vs-text ordering fixture (WP01)
+- [x] T001 Define channel model + extraction entry points in `channels.go` (WP01)
+- [x] T002 Implement per-harness extraction matrix (§3c) (WP01)
+- [x] T003 Apply §3a universal exclusion (code-edit/file-read) (WP01)
+- [x] T004 Recursive JSON re-decode + unmapped-shape logging (WP01)
+- [x] T005 Golden tests per harness shape in `channels_test.go` (WP01)
+- [x] T006 Structural-vs-text ordering fixture (WP01)
 
 **Implementation sketch:** new `internal/analyzer/channels.go` exposing
 `outputText(obj) string` and `diagnosticText(obj) string` (diagnostic ⊇ output),
