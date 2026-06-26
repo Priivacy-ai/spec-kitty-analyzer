@@ -41,3 +41,22 @@ jobs:
 
       - name: Test
         run: go test -race ./...
+
+      - name: Release cross-build smoke
+        shell: bash
+        run: |
+          set -euo pipefail
+          tmpdir="$(mktemp -d)"
+          trap 'rm -rf "${tmpdir}"' EXIT
+          targets=(
+            "linux amd64"
+            "linux arm64"
+            "darwin amd64"
+            "darwin arm64"
+            "windows amd64"
+            "windows arm64"
+          )
+          for target in "${targets[@]}"; do
+            read -r os arch <<<"${target}"
+            CGO_ENABLED=0 GOOS="${os}" GOARCH="${arch}" go build -trimpath -o "${tmpdir}/spec-kitty-analyzer_${os}_${arch}" ./cmd/spec-kitty-analyzer
+          done
