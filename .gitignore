@@ -50,3 +50,4 @@ report.pdf
 .kittify/runtime/
 .kittify/sync-state.json
 .kittify/workspaces/
+.worktrees/
