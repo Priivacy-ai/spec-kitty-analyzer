@@ -88,13 +88,13 @@ classifies only the stderr line; corpus sweep shows FP down + `branch_worktree_c
 unchanged.
 
 ### Included subtasks
-- [ ] T013 `TimelineEvent` cached `outputText`/`diagnosticText` (`types.go`) (WP03)
-- [ ] T014 Build & cache the two strings once per event via `channels.go` (WP03)
-- [ ] T015 `obj == nil` plain-text model (§3d) (WP03)
-- [ ] T016 Explicit ordering + `skipArtifactMessage` single suppression gate (§5) (WP03)
-- [ ] T017 Acceptance four-way repro + `obj==nil` tests (WP03)
-- [ ] T018 Adapt existing `analyzer_test.go` call sites; keep narrative-only test (WP03)
-- [ ] T019 Corpus FN/FP sweep evidence for the PR (§7.6) (WP03)
+- [x] T013 `TimelineEvent` cached `outputText`/`diagnosticText` (`types.go`) (WP03)
+- [x] T014 Build & cache the two strings once per event via `channels.go` (WP03)
+- [x] T015 `obj == nil` plain-text model (§3d) (WP03)
+- [x] T016 Explicit ordering + `skipArtifactMessage` single suppression gate (§5) (WP03)
+- [x] T017 Acceptance four-way repro + `obj==nil` tests (WP03)
+- [x] T018 Adapt existing `analyzer_test.go` call sites; keep narrative-only test (WP03)
+- [x] T019 Corpus FN/FP sweep evidence for the PR (§7.6) (WP03)
 
 **Implementation sketch:** in `internal/analyzer/analyzer.go` build the cached strings
 during event construction (fields added in `types.go`), implement the `obj==nil`
