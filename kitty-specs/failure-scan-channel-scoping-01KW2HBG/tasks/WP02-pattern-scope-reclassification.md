@@ -22,6 +22,7 @@ subtasks:
 phase: Phase 2 - Rules
 assignee: ''
 agent: claude
+shell_pid: '1185'
 history:
 - at: '2026-06-26T18:05:00Z'
   actor: system
