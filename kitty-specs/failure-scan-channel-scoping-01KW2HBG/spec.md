@@ -101,7 +101,7 @@ command or tool actually failed are reported as failures with recovery guidance.
 | ID | Criterion |
 |----|-----------|
 | SC-001 | On the corpus's worst-case transcript, narrative/edit-sourced false failures are substantially reduced from the measured baseline (baseline example: a transcript where the majority of flagged events came from message/edit channels). |
-| SC-002 | Zero regression in branch/worktree-confusion detection across the corpus sample (baseline example: a mission that reports it 10× must still report it 10×). |
+| SC-002 | No loss of *genuine* branch/worktree-confusion detections across the corpus sample: the **distinctive narrative reports** of the observed condition (the #1716/#2046 topology signal) are preserved. (Corrected during validation: the design's original "must still report 10×" over-counted — on the finalize-inbox baseline, only 2 of the 10 detections were genuine narrative reports; the other 8 were false positives the analyzer matched on the agent *editing/journaling/running commands about* the worktree issue, which channel-scoping correctly drops. Verified end-to-end: 10→2, with the 2 genuine detections retained.) |
 | SC-003 | Across a representative multi-mission corpus sweep, no event that was a *true* failure before the change becomes unreported after it. |
 | SC-004 | A maintainer reviewing a report can trust that listed failures correspond to events that actually occurred. |
 
