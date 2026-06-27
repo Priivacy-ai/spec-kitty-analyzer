@@ -131,6 +131,60 @@ func TestFingerprintBranchWorktreeDiagnosticScope(t *testing.T) {
 	}
 }
 
+// TestFingerprintReviewRejectedStructural pins fast-follow item A: review_rejected
+// is detected STRUCTURALLY from a JSON status event whose rejection lives in a bare
+// review_status/verdict field with NO output- or narrative-channel text. Under
+// channel scoping the §3c extraction yields empty channels for such an event, so the
+// output-scoped text rule cannot fire — this is the latent false negative the
+// structural path closes. Both channels are empty in these cases to prove detection
+// comes from the obj field, not leaked channel text.
+func TestFingerprintReviewRejectedStructural(t *testing.T) {
+	// (a) Top-level review_status: has_feedback (the wp_lane_changed status event
+	// shape) with empty channels → structural detection.
+	topLevel := map[string]any{
+		"event_type":    "wp_lane_changed",
+		"wp_id":         "WP01",
+		"review_status": "has_feedback",
+	}
+	if got := classifyFailuresWithChannels("", "", topLevel, nil); !failureListHas(got, "review_rejected") {
+		t.Fatalf("top-level review_status=has_feedback must classify review_rejected structurally: %#v", got)
+	}
+
+	// (b) Nested evidence.review.verdict: rejected (the review-evidence shape;
+	// firstJSONStringByKey recurses) with empty channels → structural detection.
+	nested := map[string]any{
+		"evidence": map[string]any{
+			"review": map[string]any{"reviewer": "X", "verdict": "rejected"},
+		},
+	}
+	if got := classifyFailuresWithChannels("", "", nested, nil); !failureListHas(got, "review_rejected") {
+		t.Fatalf("nested verdict=rejected must classify review_rejected structurally: %#v", got)
+	}
+
+	// (c) verdict: approved must NOT classify — the structural rule fires only on a
+	// rejection value, mirroring the text rule.
+	approved := map[string]any{
+		"evidence": map[string]any{"review": map[string]any{"verdict": "approved"}},
+	}
+	if got := classifyFailuresWithChannels("", "", approved, nil); failureListHas(got, "review_rejected") {
+		t.Fatalf("verdict=approved must NOT classify review_rejected: %#v", got)
+	}
+
+	// (d) Dedup: an event matched by BOTH the structural field AND the output-channel
+	// text rule yields EXACTLY ONE review_rejected finding (seen[] guard).
+	both := map[string]any{"review_status": "has_feedback"}
+	got := classifyFailuresWithChannels("review_status: has_feedback", "review_status: has_feedback", both, nil)
+	count := 0
+	for _, f := range got {
+		if f.ID == "review_rejected" {
+			count++
+		}
+	}
+	if count != 1 {
+		t.Fatalf("review_rejected must appear exactly once when both structural and text paths match; count=%d, %#v", count, got)
+	}
+}
+
 // TestFingerprintOutputScopedClassifiesFromOutput is the positive counterpart:
 // an output-scoped pattern fed via the output channel still classifies (proving
 // the scope routing is wired, not merely suppressing everything). merge_conflict's

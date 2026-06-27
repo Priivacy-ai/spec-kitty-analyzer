@@ -420,6 +420,19 @@ var failureRules = []failureRule{
 	},
 }
 
+// findFailureRule returns the failureRules entry with the given id. It is used
+// where a structural detection must emit the SAME finding as its text-rule
+// counterpart (review_rejected) without duplicating the rule's title/severity/
+// recovery strings — keeping a single source of truth for that finding's metadata.
+func findFailureRule(id string) (failureRule, bool) {
+	for _, r := range failureRules {
+		if r.id == id {
+			return r, true
+		}
+	}
+	return failureRule{}, false
+}
+
 // classifyFailures is the backward-compatible entry point. It derives the two
 // channel strings from the parsed event object (via the WP01 channel extraction)
 // and delegates to classifyFailuresWithChannels.
@@ -495,6 +508,26 @@ func classifyFailuresWithChannels(outputText, diagnosticText string, obj map[str
 		}
 		if jsonHasError(obj) {
 			add(failureRule{id: "json_error_event", title: "JSON event reports error", severity: "medium", recovery: "Inspect structured error fields and rerun only after root cause is fixed."}, "JSON error/status/exit_code field indicates failure")
+		}
+		// review_rejected, detected STRUCTURALLY (additive to the output-scoped text
+		// rule of the same id). A status event (e.g. a wp_lane_changed line in
+		// status.events.jsonl, or review evidence carrying evidence.review.verdict)
+		// records the rejection as a bare review_status/verdict JSON FIELD with no
+		// output- or narrative-channel text, so the §3c channel extraction yields
+		// nothing for the text scanner to match — the rejection is a latent false
+		// negative under channel scoping (the pre-scoping flattenJSON pipeline saw it).
+		// Key off the field directly. firstJSONStringByKey recurses, so it finds both a
+		// top-level review_status and a nested evidence.review.verdict. The values mirror
+		// the text rule exactly (review_status==has_feedback, verdict==rejected); the
+		// seen[] dedup means an event matched by both this and the text rule yields ONE
+		// finding. If the rule entry ever moves, findFailureRule keeps title/severity/
+		// recovery single-sourced instead of duplicating the strings here.
+		if rule, ok := findFailureRule("review_rejected"); ok {
+			if rs := firstJSONStringByKey(obj, "review_status"); strings.EqualFold(strings.TrimSpace(rs), "has_feedback") {
+				add(rule, "JSON review_status field is has_feedback")
+			} else if v := firstJSONStringByKey(obj, "verdict"); strings.EqualFold(strings.TrimSpace(v), "rejected") {
+				add(rule, "JSON verdict field is rejected")
+			}
 		}
 	}
 
