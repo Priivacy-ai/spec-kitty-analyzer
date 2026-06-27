@@ -511,22 +511,26 @@ func classifyFailuresWithChannels(outputText, diagnosticText string, obj map[str
 		}
 		// review_rejected, detected STRUCTURALLY (additive to the output-scoped text
 		// rule of the same id). A status event (e.g. a wp_lane_changed line in
-		// status.events.jsonl, or review evidence carrying evidence.review.verdict)
-		// records the rejection as a bare review_status/verdict JSON FIELD with no
+		// status.events.jsonl, or a review-evidence event carrying
+		// evidence.review.verdict) records the rejection as a bare JSON FIELD with no
 		// output- or narrative-channel text, so the §3c channel extraction yields
-		// nothing for the text scanner to match — the rejection is a latent false
-		// negative under channel scoping (the pre-scoping flattenJSON pipeline saw it).
-		// Key off the field directly. firstJSONStringByKey recurses, so it finds both a
-		// top-level review_status and a nested evidence.review.verdict. The values mirror
-		// the text rule exactly (review_status==has_feedback, verdict==rejected); the
-		// seen[] dedup means an event matched by both this and the text rule yields ONE
-		// finding. If the rule entry ever moves, findFailureRule keeps title/severity/
-		// recovery single-sourced instead of duplicating the strings here.
+		// nothing for the text scanner to match — a latent false negative under channel
+		// scoping (the pre-scoping flattenJSON pipeline saw it).
+		//
+		// Match EXPLICIT, deterministic paths only (review_scope review #1): a
+		// whole-object recursive search (firstJSONStringByKey) would (a) false-positive
+		// on a stale/historical verdict stored elsewhere in the same event — e.g. an
+		// approved transition whose history[] still carries an old "rejected" — and
+		// (b) be order-nondeterministic (Go map iteration), violating FR-006. nestedString
+		// descends only the named keys. Values mirror the text rule
+		// (review_status==has_feedback, verdict==rejected); the seen[] dedup keeps an
+		// event matched by both this and the text rule at ONE finding. findFailureRule
+		// keeps the rule's title/severity/recovery single-sourced.
 		if rule, ok := findFailureRule("review_rejected"); ok {
-			if rs := firstJSONStringByKey(obj, "review_status"); strings.EqualFold(strings.TrimSpace(rs), "has_feedback") {
-				add(rule, "JSON review_status field is has_feedback")
-			} else if v := firstJSONStringByKey(obj, "verdict"); strings.EqualFold(strings.TrimSpace(v), "rejected") {
-				add(rule, "JSON verdict field is rejected")
+			if rs, ok := obj["review_status"].(string); ok && strings.EqualFold(strings.TrimSpace(rs), "has_feedback") {
+				add(rule, "top-level review_status field is has_feedback")
+			} else if v := nestedString(obj, "evidence", "review", "verdict"); strings.EqualFold(strings.TrimSpace(v), "rejected") {
+				add(rule, "evidence.review.verdict field is rejected")
 			}
 		}
 	}

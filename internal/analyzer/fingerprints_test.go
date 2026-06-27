@@ -170,6 +170,22 @@ func TestFingerprintReviewRejectedStructural(t *testing.T) {
 		t.Fatalf("verdict=approved must NOT classify review_rejected: %#v", got)
 	}
 
+	// (c2) review #1 guard: an event that is APPROVED now but carries a stale/historical
+	// "rejected" verdict elsewhere (here under history[]) must NOT classify. The
+	// detector matches only the explicit current paths (top-level review_status,
+	// evidence.review.verdict); a whole-object recursive search would mis-fire on the
+	// stale value AND be order-nondeterministic (FR-006).
+	staleHistory := map[string]any{
+		"to_lane":  "approved",
+		"evidence": map[string]any{"review": map[string]any{"verdict": "approved"}},
+		"history": []any{
+			map[string]any{"review": map[string]any{"verdict": "rejected", "reference": "old cycle"}},
+		},
+	}
+	if got := classifyFailuresWithChannels("", "", staleHistory, nil); failureListHas(got, "review_rejected") {
+		t.Fatalf("stale historical verdict=rejected must NOT classify (only current paths count): %#v", got)
+	}
+
 	// (d) Dedup: an event matched by BOTH the structural field AND the output-channel
 	// text rule yields EXACTLY ONE review_rejected finding (seen[] guard).
 	both := map[string]any{"review_status": "has_feedback"}
