@@ -249,14 +249,27 @@ func extractCodexPayload(payload map[string]any, ct *channelText) {
 		if len(ct.output) == before {
 			logUnmappedShape("codex payload.type=" + quote(ptype) + " keys=" + strings.Join(jsonKeys(payload), ","))
 		}
-	case "reasoning", "message":
+	case "reasoning", "message", "agent_message":
 		before := len(ct.narrative)
+		// reasoning/message carry text under payload.content; agent_message (codex
+		// assistant prose) carries a bare payload.message string. Read whichever this
+		// type uses → narrative. Narrative is diagnostic-eligible only, so this never
+		// reaches an output-scoped rule.
 		if v, ok := payload["content"]; ok {
 			collectTextLeaves(v, &ct.narrative)
+		}
+		if s, ok := payload["message"].(string); ok {
+			appendFragment(&ct.narrative, s)
 		}
 		if len(ct.narrative) == before {
 			logUnmappedShape("codex payload.type=" + quote(ptype) + " keys=" + strings.Join(jsonKeys(payload), ","))
 		}
+	case "token_count", "task_complete":
+		// Excluded metadata (§3c), and — being mapped — intentionally NOT logged.
+		// token_count carries only token-usage stats (payload.info), no human text.
+		// task_complete is a turn-completion marker whose last_agent_message simply
+		// echoes the narrative already captured from the matching agent_message event;
+		// extracting it here would double-count that prose.
 	default:
 		logUnmappedShape("codex payload.type=" + quote(ptype))
 	}

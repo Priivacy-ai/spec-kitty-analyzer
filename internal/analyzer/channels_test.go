@@ -227,6 +227,41 @@ func TestChannelExtractionMatrix(t *testing.T) {
 			want: expectNarrative,
 		},
 		{
+			name: "CodexAgentMessage_narrative",
+			obj: map[string]any{
+				"payload": map[string]any{
+					"type":    "agent_message",
+					"message": "SIG_CODEXAGENT reviewing the merge failed scenario before fixing",
+				},
+			},
+			sig:  "SIG_CODEXAGENT",
+			want: expectNarrative,
+		},
+		{
+			name: "CodexTokenCount_excluded",
+			obj: map[string]any{
+				"payload": map[string]any{
+					"type": "token_count",
+					"info": map[string]any{
+						"note": "SIG_CODEXTOKENS exit code 1 traceback rejected",
+					},
+				},
+			},
+			sig:  "SIG_CODEXTOKENS",
+			want: expectNeither,
+		},
+		{
+			name: "CodexTaskComplete_excluded",
+			obj: map[string]any{
+				"payload": map[string]any{
+					"type":               "task_complete",
+					"last_agent_message": "SIG_CODEXTASKDONE review failed: verdict: rejected",
+				},
+			},
+			sig:  "SIG_CODEXTASKDONE",
+			want: expectNeither,
+		},
+		{
 			name: "TopLevelError_output",
 			obj: map[string]any{
 				"error": "SIG_TOPERR something blew up",
@@ -454,6 +489,47 @@ func TestCodexKnownTypeMissingFieldLogsAndExcludes(t *testing.T) {
 			}
 			if !strings.Contains(logged, "codex payload.type=") {
 				t.Errorf("expected codex payload.type detail in log, got %q", logged)
+			}
+		})
+	}
+}
+
+// Codex payload types that are now MAPPED (agent_message → narrative;
+// token_count/task_complete → excluded metadata) must NOT emit the unmapped-shape
+// matrix-growth log — that is the noise the §3c mapping removes. Pinning silence
+// guards against a regression that re-floods stderr for these known types.
+func TestCodexMappedTypesNotLogged(t *testing.T) {
+	cases := []struct {
+		name string
+		obj  map[string]any
+	}{
+		{
+			name: "agent_message",
+			obj: map[string]any{
+				"payload": map[string]any{"type": "agent_message", "message": "narrative prose"},
+			},
+		},
+		{
+			name: "token_count",
+			obj: map[string]any{
+				"payload": map[string]any{"type": "token_count", "info": map[string]any{"total_tokens": 10}},
+			},
+		},
+		{
+			name: "task_complete",
+			obj: map[string]any{
+				"payload": map[string]any{"type": "task_complete", "last_agent_message": "done"},
+			},
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			logged := captureStderr(t, func() {
+				_ = outputText(tc.obj)
+				_ = diagnosticText(tc.obj)
+			})
+			if strings.Contains(logged, "unmapped event shape") {
+				t.Errorf("mapped codex type %q should not log unmapped-shape, got %q", tc.name, logged)
 			}
 		})
 	}
