@@ -512,6 +512,40 @@ func TestArtifactSuppressionAllFourKinds(t *testing.T) {
 	}
 }
 
+// TestReviewRejectedStructuralEndToEndStatusEvents is the integration guard for
+// fast-follow item A. It drives the FULL pipeline (parseFile -> path-kind
+// classification -> eventFromJSONObject -> classify -> skipArtifactMessage gate ->
+// findings) from a status.events.jsonl source — kind mission_status_events, which is
+// NOT an artifact kind, so the gate must let review_rejected through. The unit test
+// (TestFingerprintReviewRejectedStructural) exercises the classifier directly; this
+// covers the integration layer it skips (the layer where the Codex whitelist/gate
+// finding lived). A rejection recorded as a bare structural field with no channel text
+// is invisible to the pre-A channel scanner (baseline false negative); the structural
+// detector must recover exactly the two rejection events and ignore the approval.
+func TestReviewRejectedStructuralEndToEndStatusEvents(t *testing.T) {
+	path := "repo/kitty-specs/demo/status.events.jsonl"
+	lines := []string{
+		// Rejection #1: top-level review_status on a wp_lane_changed status event.
+		`{"event_type":"wp_lane_changed","wp_id":"WP01","to_lane":"planned","review_status":"has_feedback"}`,
+		// Rejection #2: nested evidence.review.verdict on a review-evidence event.
+		`{"event_id":"x","evidence":{"review":{"reviewer":"K","verdict":"rejected"}},"wp_id":"WP02"}`,
+		// Not a rejection: an approved verdict must NOT classify.
+		`{"event_id":"y","evidence":{"review":{"reviewer":"K","verdict":"approved"}},"wp_id":"WP03"}`,
+	}
+	data := strings.Join(lines, "\n") + "\n"
+
+	events, _ := parseFile(path, "mission_status_events", []byte(data), 0, newBuildState())
+	n := 0
+	for _, e := range events {
+		if failureListHas(e.Failures, "review_rejected") {
+			n++
+		}
+	}
+	if n != 2 {
+		t.Fatalf("review_rejected must surface end-to-end on exactly the 2 rejection events (has_feedback + verdict:rejected), not the approval; got %d. events=%#v", n, events)
+	}
+}
+
 // TestArtifactReviewRejectedWhitelist proves WP frontmatter review_rejected survives
 // while neighboring artifact diagnostic failures are still suppressed.
 func TestArtifactReviewRejectedWhitelist(t *testing.T) {
