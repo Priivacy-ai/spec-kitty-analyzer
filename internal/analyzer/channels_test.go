@@ -251,14 +251,30 @@ func TestChannelExtractionMatrix(t *testing.T) {
 			want: expectNeither,
 		},
 		{
-			name: "CodexTaskComplete_excluded",
+			name: "CodexTaskComplete_narrative",
 			obj: map[string]any{
 				"payload": map[string]any{
 					"type":               "task_complete",
-					"last_agent_message": "SIG_CODEXTASKDONE review failed: verdict: rejected",
+					"last_agent_message": "SIG_CODEXTASKDONE summary of the completed turn",
 				},
 			},
 			sig:  "SIG_CODEXTASKDONE",
+			want: expectNarrative,
+		},
+		{
+			// review #4 guard: a reasoning/message payload that ALSO carries a stray
+			// top-level `message` string must NOT have that string read — only
+			// agent_message keys its text under payload.message. The content text lands
+			// in narrative; SIG_STRAYMSG (in the message field) must reach NEITHER channel.
+			name: "CodexMessageStrayMessageField_excluded",
+			obj: map[string]any{
+				"payload": map[string]any{
+					"type":    "message",
+					"content": "discussing the plan",
+					"message": "SIG_STRAYMSG must not be read for a message-type payload",
+				},
+			},
+			sig:  "SIG_STRAYMSG",
 			want: expectNeither,
 		},
 		{

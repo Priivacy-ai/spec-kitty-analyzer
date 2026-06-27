@@ -249,27 +249,45 @@ func extractCodexPayload(payload map[string]any, ct *channelText) {
 		if len(ct.output) == before {
 			logUnmappedShape("codex payload.type=" + quote(ptype) + " keys=" + strings.Join(jsonKeys(payload), ","))
 		}
-	case "reasoning", "message", "agent_message":
+	case "reasoning", "message":
 		before := len(ct.narrative)
-		// reasoning/message carry text under payload.content; agent_message (codex
-		// assistant prose) carries a bare payload.message string. Read whichever this
-		// type uses → narrative. Narrative is diagnostic-eligible only, so this never
-		// reaches an output-scoped rule.
+		// reasoning/message carry text under payload.content → narrative. Only
+		// payload.content is read here (NOT a stray payload.message): broadening these
+		// existing types to also read payload.message would change their behavior. The
+		// agent_message type, which keys its text under payload.message, has its own case.
 		if v, ok := payload["content"]; ok {
 			collectTextLeaves(v, &ct.narrative)
 		}
+		if len(ct.narrative) == before {
+			logUnmappedShape("codex payload.type=" + quote(ptype) + " keys=" + strings.Join(jsonKeys(payload), ","))
+		}
+	case "agent_message":
+		// Codex assistant prose: text under a bare payload.message string → narrative.
+		// Narrative is diagnostic-eligible only, so this never reaches an output rule.
+		before := len(ct.narrative)
 		if s, ok := payload["message"].(string); ok {
 			appendFragment(&ct.narrative, s)
 		}
 		if len(ct.narrative) == before {
 			logUnmappedShape("codex payload.type=" + quote(ptype) + " keys=" + strings.Join(jsonKeys(payload), ","))
 		}
-	case "token_count", "task_complete":
+	case "task_complete":
+		// Turn-completion marker; payload.last_agent_message is that turn's final
+		// assistant narrative → narrative channel. It often echoes the paired
+		// agent_message event, but extracting it here avoids silently dropping a real
+		// narrative signal when no pair exists (review #3); narrative is
+		// diagnostic-eligible only. An absent last_agent_message is logged as schema
+		// drift, consistent with the other known types.
+		before := len(ct.narrative)
+		if s, ok := payload["last_agent_message"].(string); ok {
+			appendFragment(&ct.narrative, s)
+		}
+		if len(ct.narrative) == before {
+			logUnmappedShape("codex payload.type=" + quote(ptype) + " keys=" + strings.Join(jsonKeys(payload), ","))
+		}
+	case "token_count":
 		// Excluded metadata (§3c), and — being mapped — intentionally NOT logged.
 		// token_count carries only token-usage stats (payload.info), no human text.
-		// task_complete is a turn-completion marker whose last_agent_message simply
-		// echoes the narrative already captured from the matching agent_message event;
-		// extracting it here would double-count that prose.
 	default:
 		logUnmappedShape("codex payload.type=" + quote(ptype))
 	}
