@@ -488,6 +488,25 @@ func TestCodexKnownTypeMissingFieldLogsAndExcludes(t *testing.T) {
 				},
 			},
 		},
+		{
+			name: "agent_message missing message",
+			obj: map[string]any{
+				"payload": map[string]any{
+					"type":   "agent_message",
+					"phase":  "commentary",
+					"callId": "x",
+				},
+			},
+		},
+		{
+			name: "task_complete missing last_agent_message",
+			obj: map[string]any{
+				"payload": map[string]any{
+					"type":    "task_complete",
+					"turn_id": "abc",
+				},
+			},
+		},
 	}
 
 	for _, tc := range cases {
