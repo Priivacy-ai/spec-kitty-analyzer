@@ -444,7 +444,9 @@ func eventFromText(path string, line, turn int, text string, obj map[string]any)
 	// this returns, before findings aggregation — see channelStringsForEvent and the
 	// parseFile gate comment.
 	outCh, diagCh := channelStringsForEvent(path, text, obj)
-	failures := classifyFailuresWithChannels(outCh, diagCh, obj, cli)
+	// The source kind (from the path, §3d vocabulary) gates the structural
+	// review_rejected detector to spec-kitty live-event streams only.
+	failures := classifyFailuresWithChannels(outCh, diagCh, classifyPathKind(path), obj, cli)
 	kind := "message"
 	switch {
 	case len(failures) > 0:

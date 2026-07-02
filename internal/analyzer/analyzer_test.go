@@ -546,38 +546,39 @@ func TestReviewRejectedStructuralEndToEndStatusEvents(t *testing.T) {
 	}
 }
 
-// TestReviewRejectedStructuralSuppressedOnArtifactSnapshots is the negative guard
-// for fast-follow item A's interaction with the artifact whitelist. Item A makes the
-// classifier detect review_rejected STRUCTURALLY from a bare review_status/verdict
-// JSON field, so a mission_meta / mission_status_snapshot / mission_artifact whose
-// JSON merely STORES or snapshots review state (history, references) now classifies
-// review_rejected PRE-gate. Those are not live rejections and must be SUPPRESSED
-// end-to-end: only a work_package may surface review_rejected, and only from its
-// frontmatter detector (artifactFailureAllowed keys on kind==work_package AND the
-// frontmatter reason). The pre-gate assertion proves the gate — not a missing
-// classification — is what drops it. The positive work_package/status-event paths are
-// covered by TestArtifactReviewRejectedWhitelist and
-// TestReviewRejectedStructuralEndToEndStatusEvents.
-func TestReviewRejectedStructuralSuppressedOnArtifactSnapshots(t *testing.T) {
+// TestReviewRejectedStructuralNotFiredOnNonEventSources is the negative guard for
+// fast-follow item A's SOURCE-KIND gate. Item A detects review_rejected structurally
+// from a bare review_status/verdict JSON field, but those are generic-enough field
+// names that a plain .json file, a harness transcript, or an artifact SNAPSHOT that
+// merely stores review state could carry them. The detector is gated
+// (isStructuralReviewEventKind) to spec-kitty live-event streams only, so none of
+// those non-event sources may surface review_rejected end-to-end — a real
+// false-positive path if the gate regresses. Note this is closed at DETECTION time
+// (kind gate), independent of the artifact whitelist, which is why a generic "json"
+// file (NOT an artifact kind, so never whitelist-gated) is included. The positive
+// live-event and work_package paths are covered by
+// TestReviewRejectedStructuralEndToEndStatusEvents and TestArtifactReviewRejectedWhitelist.
+func TestReviewRejectedStructuralNotFiredOnNonEventSources(t *testing.T) {
 	data := `{"review_status":"has_feedback"}`
-	obj, ok := decodeJSONObject([]byte(data))
-	if !ok {
-		t.Fatalf("test JSON did not decode")
-	}
-	if pre := eventFromJSONObject("repo/kitty-specs/sample/status.json", 1, 1, obj); !failureListHas(pre.Failures, "review_rejected") {
-		t.Fatalf("pre-gate object must classify review_rejected structurally (else the test proves nothing); got %#v", pre.Failures)
-	}
-
-	suppressed := []struct{ name, kind, path string }{
+	nonEvent := []struct{ name, kind, path string }{
+		// Generic .json file — NOT an artifact kind, so the whitelist would never gate
+		// it; only the source-kind detection gate keeps review_rejected off it.
+		{"generic_json", "json", "repo/data/some-config.json"},
+		{"jsonl_transcript", "jsonl_transcript", "repo/logs/session.jsonl"},
+		// A non-event file under kitty-ops/ classifies as op_jsonl (classifyPathKind
+		// keys on the path segment, not the extension), but op_jsonl is NOT a gated
+		// live-event kind — so it must not surface review_rejected either.
+		{"kitty_ops_nonevent", "op_jsonl", "repo/kitty-ops/notes.json"},
+		// Artifact snapshots that STORE review state rather than emit a live rejection.
 		{"mission_meta", "mission_meta", "repo/kitty-specs/sample/meta.json"},
 		{"mission_status_snapshot", "mission_status_snapshot", "repo/kitty-specs/sample/status.json"},
 		{"mission_artifact", "mission_artifact", "repo/kitty-specs/sample/spec.md.json"},
 	}
-	for _, c := range suppressed {
+	for _, c := range nonEvent {
 		events, _ := parseFile(c.path, c.kind, []byte(data+"\n"), 0, newBuildState())
 		for _, e := range events {
 			if failureListHas(e.Failures, "review_rejected") {
-				t.Fatalf("%s: structural review_rejected must be suppressed (whitelist is work_package + frontmatter-reason only); got %#v", c.name, e.Failures)
+				t.Fatalf("%s: structural review_rejected must NOT surface from a non-live-event source; got %#v", c.name, e.Failures)
 			}
 		}
 	}

@@ -529,8 +529,8 @@ func TestCodexKnownTypeMissingFieldLogsAndExcludes(t *testing.T) {
 	}
 }
 
-// Codex payload types that are now MAPPED (agent_message → narrative;
-// token_count/task_complete → excluded metadata) must NOT emit the unmapped-shape
+// Codex payload types that are now MAPPED (agent_message and task_complete →
+// narrative; token_count → excluded metadata) must NOT emit the unmapped-shape
 // matrix-growth log — that is the noise the §3c mapping removes. Pinning silence
 // guards against a regression that re-floods stderr for these known types.
 func TestCodexMappedTypesNotLogged(t *testing.T) {

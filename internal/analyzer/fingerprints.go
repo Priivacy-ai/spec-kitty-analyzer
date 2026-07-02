@@ -420,6 +420,32 @@ var failureRules = []failureRule{
 	},
 }
 
+// isStructuralReviewEventKind reports whether a source kind is a spec-kitty
+// live-event stream whose lines ARE discrete runtime events — the only source for
+// which the structural review_rejected detector (classifyFailuresWithChannels) is
+// enabled. It is scoped to "mission_status_events" ALONE: that kind maps to exactly
+// one file, kitty-specs/**/status.events.jsonl (classifyPathKind keys on the literal
+// basename), which is the mission event log and reliably carries both shapes item A
+// targets — a top-level review_status and an evidence.review.verdict.
+//
+// It deliberately EXCLUDES everything else, because review_status/verdict are
+// generic-enough field names to appear in non-event data:
+//   - generic "json" (a plain .json file that happens to carry the field — the
+//     original false-positive path this gate closes),
+//   - "jsonl_transcript" (harness session logs never carry these bare fields),
+//   - "op_jsonl" — NOT included: classifyPathKind returns it for ANY supported file
+//     under a kitty-ops/ segment (e.g. kitty-ops/notes.md, kitty-ops/config.json),
+//     not just an op-event stream, so it is too broad to gate on safely. Op-event
+//     review detection, if ever needed, wants a tightened classifyPathKind first.
+//   - the artifact kinds work_package / mission_meta / mission_status_snapshot /
+//     mission_artifact, which STORE or snapshot review state rather than emit a live
+//     rejection (WP frontmatter rejections come through addWorkPackageFrontmatterFailures).
+//
+// Values are the classifyPathKind vocabulary.
+func isStructuralReviewEventKind(kind string) bool {
+	return kind == "mission_status_events"
+}
+
 // findFailureRule returns the failureRules entry with the given id. It is used
 // where a structural detection must emit the SAME finding as its text-rule
 // counterpart (review_rejected) without duplicating the rule's title/severity/
@@ -452,7 +478,10 @@ func classifyFailures(text string, obj map[string]any, invocations []CLIInvocati
 		outText = text
 		diagText = text
 	}
-	return classifyFailuresWithChannels(outText, diagText, obj, invocations)
+	// Legacy/back-compat entry point: no source-kind context, so the source-kind-gated
+	// structural review_rejected detector stays OFF here (structural review detection is
+	// reached through eventFromText, which passes the real source kind).
+	return classifyFailuresWithChannels(outText, diagText, "", obj, invocations)
 }
 
 // classifyFailuresWithChannels is the scoped core. Each text-pattern rule is
@@ -461,7 +490,7 @@ func classifyFailures(text string, obj map[string]any, invocations []CLIInvocati
 // diagnosticText. The structural obj-field rules and the invocation/sync rules are
 // unchanged; the generic fallback runs through outputText. Callers that already
 // hold the cached channel strings (WP03) call this directly.
-func classifyFailuresWithChannels(outputText, diagnosticText string, obj map[string]any, invocations []CLIInvocation) []FailureFingerprint {
+func classifyFailuresWithChannels(outputText, diagnosticText, sourceKind string, obj map[string]any, invocations []CLIInvocation) []FailureFingerprint {
 	seen := map[string]bool{}
 	var out []FailureFingerprint
 	add := func(rule failureRule, reason string) {
@@ -517,6 +546,16 @@ func classifyFailuresWithChannels(outputText, diagnosticText string, obj map[str
 		// nothing for the text scanner to match — a latent false negative under channel
 		// scoping (the pre-scoping flattenJSON pipeline saw it).
 		//
+		// SOURCE-KIND GATED: fire only for spec-kitty live-event streams
+		// (isStructuralReviewEventKind), not for arbitrary JSON. review_status/verdict
+		// are generic-enough field names that a plain .json input (kind "json") — or a
+		// harness transcript line — could otherwise carry them and mint a false
+		// review_rejected. The artifact whitelist alone does not close this: a generic
+		// .json file is NOT an artifact kind, so skipArtifactMessage never gates it. WP
+		// frontmatter rejections come through addWorkPackageFrontmatterFailures instead;
+		// mission_meta/status_snapshot/mission_artifact merely STORE review state and are
+		// intentionally excluded here (they are not live events).
+		//
 		// Match EXPLICIT, deterministic paths only (review_scope review #1): a
 		// whole-object recursive search (firstJSONStringByKey) would (a) false-positive
 		// on a stale/historical verdict stored elsewhere in the same event — e.g. an
@@ -526,7 +565,7 @@ func classifyFailuresWithChannels(outputText, diagnosticText string, obj map[str
 		// (review_status==has_feedback, verdict==rejected); the seen[] dedup keeps an
 		// event matched by both this and the text rule at ONE finding. findFailureRule
 		// keeps the rule's title/severity/recovery single-sourced.
-		if rule, ok := findFailureRule("review_rejected"); ok {
+		if rule, ok := findFailureRule("review_rejected"); ok && isStructuralReviewEventKind(sourceKind) {
 			if rs, ok := obj["review_status"].(string); ok && strings.EqualFold(strings.TrimSpace(rs), "has_feedback") {
 				add(rule, "top-level review_status field is has_feedback")
 			} else if v := nestedString(obj, "evidence", "review", "verdict"); strings.EqualFold(strings.TrimSpace(v), "rejected") {
