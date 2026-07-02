@@ -2,7 +2,7 @@ package analyzer
 
 import "time"
 
-const Version = "0.1.1"
+const Version = "0.2.0"
 
 type Report struct {
 	Version     string           `json:"version"`
