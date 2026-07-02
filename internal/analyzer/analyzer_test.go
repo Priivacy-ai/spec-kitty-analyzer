@@ -165,6 +165,12 @@ func TestPermissionDeniedFingerprintPrecision(t *testing.T) {
 		"PermissionError: [Errno 13] Permission denied",
 		"failed to write file (os error 13)",
 		"git@github.com: Permission denied (publickey).",
+		// EPERM / errno 1 "Operation not permitted" (issue #6) — real denials on this
+		// corpus (macOS sandbox/TCC + git lock files), same token: phrase structure.
+		".git/spec-kitty-locks/codex-test.lock: Operation not permitted",
+		"/Users/x/Library/Caches/com.apple.HomeKit: Operation not permitted",
+		"EPERM: operation not permitted, unlink '/tmp/x.lock'",
+		"PermissionError: [Errno 1] Operation not permitted: '/System/Library/x'",
 	}
 	for _, text := range positives {
 		failures := classifyFailures(text, nil, nil)
@@ -186,6 +192,14 @@ func TestPermissionDeniedFingerprintPrecision(t *testing.T) {
 		"documents flock(LOCK_NB) contention as EACCES or EAGAIN",
 		`_completed(1, stderr="permission denied"),`,
 		"/timeline/18/failures :: Permission denied",
+		// EPERM prose/vocabulary that discusses the phrase without the token: form
+		// (issue #6) — must not classify.
+		"EPERM / Operation not permitted — errno 1, a distinct-but-related denial class",
+		"handle EPERM (operation not permitted) gracefully in the retry loop",
+		"the syscall may return operation not permitted on sandboxed paths",
+		// The analyzer's own "::"-delimited self-output must not re-classify (the
+		// `[^\s:]` guard excludes the `::` form), mirroring the Permission-denied guard.
+		"/timeline/18/failures :: Operation not permitted",
 	}
 	for _, text := range negatives {
 		failures := classifyFailures(text, nil, nil)

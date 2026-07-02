@@ -432,6 +432,20 @@ var failureRules = []failureRule{
 			// Unix errno 5 == EIO ("Input/output error"; EACCES is 13). Anchor to the
 			// Windows message so a Unix EIO error never misclassifies as a denial.
 			outRx(`(?i)access is denied\.?\s*\(os error 5\)`),
+			// EPERM / errno 1 "Operation not permitted" — a distinct-but-related denial
+			// class (issue #6). Real on this corpus: macOS sandbox/TCC and git lock-file
+			// denials ("<path>: Operation not permitted", e.g. .git/spec-kitty-locks/
+			// *.lock, Library/Caches/com.apple.*). Uses the SAME `token: phrase`
+			// structural guard as the permission-denied line above (a non-space,
+			// non-colon token immediately before `: operation not permitted`), so prose
+			// that merely discusses the phrase does not match; this also catches Node's
+			// "EPERM: operation not permitted" (EPERM is the leading token). The bare
+			// `EPERM` literal is NOT matched — real EPERM surfaces via this message, and
+			// the literal appears mostly in discussion. Other-shell / parenthetical /
+			// bare-Windows denial forms are deferred (issue #6) pending representative
+			// corpus coverage.
+			outRx(`(?i)[^\s:]:\s+operation not permitted\b`),
+			outRx(`\[Errno 1\] Operation not permitted`),
 		},
 	},
 }
