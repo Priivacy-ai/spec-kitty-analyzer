@@ -51,6 +51,32 @@ func jsonKeys(obj map[string]any) []string {
 	return keys
 }
 
+// nestedString resolves an EXPLICIT, deterministic key path to a string leaf,
+// descending only through the named keys (no map-iteration order dependence, no
+// recursion into sibling/historical branches). Returns "" if any segment is
+// missing or not the expected type. Use this — not firstJSONStringByKey — where a
+// match must mean a SPECIFIC field (e.g. the current review verdict at
+// evidence.review.verdict), not "this value appears somewhere in the object".
+func nestedString(obj map[string]any, path ...string) string {
+	var cur any = obj
+	for i, key := range path {
+		m, ok := cur.(map[string]any)
+		if !ok {
+			return ""
+		}
+		v, ok := m[key]
+		if !ok {
+			return ""
+		}
+		if i == len(path)-1 {
+			s, _ := v.(string)
+			return s
+		}
+		cur = v
+	}
+	return ""
+}
+
 func firstJSONStringByKey(value any, targets ...string) string {
 	target := map[string]bool{}
 	for _, t := range targets {

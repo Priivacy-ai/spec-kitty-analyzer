@@ -227,6 +227,57 @@ func TestChannelExtractionMatrix(t *testing.T) {
 			want: expectNarrative,
 		},
 		{
+			name: "CodexAgentMessage_narrative",
+			obj: map[string]any{
+				"payload": map[string]any{
+					"type":    "agent_message",
+					"message": "SIG_CODEXAGENT reviewing the merge failed scenario before fixing",
+				},
+			},
+			sig:  "SIG_CODEXAGENT",
+			want: expectNarrative,
+		},
+		{
+			name: "CodexTokenCount_excluded",
+			obj: map[string]any{
+				"payload": map[string]any{
+					"type": "token_count",
+					"info": map[string]any{
+						"note": "SIG_CODEXTOKENS exit code 1 traceback rejected",
+					},
+				},
+			},
+			sig:  "SIG_CODEXTOKENS",
+			want: expectNeither,
+		},
+		{
+			name: "CodexTaskComplete_narrative",
+			obj: map[string]any{
+				"payload": map[string]any{
+					"type":               "task_complete",
+					"last_agent_message": "SIG_CODEXTASKDONE summary of the completed turn",
+				},
+			},
+			sig:  "SIG_CODEXTASKDONE",
+			want: expectNarrative,
+		},
+		{
+			// review #4 guard: a reasoning/message payload that ALSO carries a stray
+			// top-level `message` string must NOT have that string read — only
+			// agent_message keys its text under payload.message. The content text lands
+			// in narrative; SIG_STRAYMSG (in the message field) must reach NEITHER channel.
+			name: "CodexMessageStrayMessageField_excluded",
+			obj: map[string]any{
+				"payload": map[string]any{
+					"type":    "message",
+					"content": "discussing the plan",
+					"message": "SIG_STRAYMSG must not be read for a message-type payload",
+				},
+			},
+			sig:  "SIG_STRAYMSG",
+			want: expectNeither,
+		},
+		{
 			name: "TopLevelError_output",
 			obj: map[string]any{
 				"error": "SIG_TOPERR something blew up",
@@ -249,8 +300,7 @@ func TestChannelExtractionMatrix(t *testing.T) {
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			out := outputText(tc.obj)
-			diag := diagnosticText(tc.obj)
+			out, diag := channelTextPair(tc.obj)
 
 			// Invariant: diagnosticText ⊇ outputText (output is a prefix).
 			if !strings.HasPrefix(diag, out) {
@@ -302,8 +352,7 @@ func TestChannelStructuralVsTextOrdering(t *testing.T) {
 		"error": "SIG_TOPLEVELERR command exited with status 1",
 	}
 
-	out := outputText(obj)
-	diag := diagnosticText(obj)
+	out, diag := channelTextPair(obj)
 
 	if !strings.Contains(out, "SIG_TOPLEVELERR") {
 		t.Errorf("top-level error must appear in outputText, got %q", out)
@@ -335,8 +384,7 @@ func TestChannelReadEditExclusionPreservesSiblingOutput(t *testing.T) {
 		},
 	}
 
-	out := outputText(obj)
-	diag := diagnosticText(obj)
+	out, diag := channelTextPair(obj)
 
 	for _, sig := range []string{"SIG_STDERR", "SIG_ERROR"} {
 		if !strings.Contains(out, sig) {
@@ -369,14 +417,14 @@ func TestChannelDeterminism(t *testing.T) {
 		},
 	}
 
-	firstOut := outputText(obj)
-	firstDiag := diagnosticText(obj)
+	firstOut, firstDiag := channelTextPair(obj)
 	for i := 0; i < 5; i++ {
-		if got := outputText(obj); got != firstOut {
-			t.Fatalf("outputText not deterministic: %q != %q", got, firstOut)
+		gotOut, gotDiag := channelTextPair(obj)
+		if gotOut != firstOut {
+			t.Fatalf("outputText not deterministic: %q != %q", gotOut, firstOut)
 		}
-		if got := diagnosticText(obj); got != firstDiag {
-			t.Fatalf("diagnosticText not deterministic: %q != %q", got, firstDiag)
+		if gotDiag != firstDiag {
+			t.Fatalf("diagnosticText not deterministic: %q != %q", gotDiag, firstDiag)
 		}
 	}
 }
@@ -437,15 +485,35 @@ func TestCodexKnownTypeMissingFieldLogsAndExcludes(t *testing.T) {
 				},
 			},
 		},
+		{
+			name: "agent_message missing message",
+			obj: map[string]any{
+				"payload": map[string]any{
+					"type":   "agent_message",
+					"phase":  "commentary",
+					"callId": "x",
+				},
+			},
+		},
+		{
+			name: "task_complete missing last_agent_message",
+			obj: map[string]any{
+				"payload": map[string]any{
+					"type":    "task_complete",
+					"turn_id": "abc",
+				},
+			},
+		},
 	}
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			logged := captureStderr(t, func() {
-				if out := outputText(tc.obj); out != "" {
+				out, diag := channelTextPair(tc.obj)
+				if out != "" {
 					t.Errorf("outputText = %q, want empty (excluded)", out)
 				}
-				if diag := diagnosticText(tc.obj); diag != "" {
+				if diag != "" {
 					t.Errorf("diagnosticText = %q, want empty (excluded)", diag)
 				}
 			})
@@ -454,6 +522,49 @@ func TestCodexKnownTypeMissingFieldLogsAndExcludes(t *testing.T) {
 			}
 			if !strings.Contains(logged, "codex payload.type=") {
 				t.Errorf("expected codex payload.type detail in log, got %q", logged)
+			}
+			if count := strings.Count(logged, "unmapped event shape"); count != 1 {
+				t.Errorf("expected exactly one schema-drift log from paired extraction, got %d: %q", count, logged)
+			}
+		})
+	}
+}
+
+// Codex payload types that are now MAPPED (agent_message and task_complete →
+// narrative; token_count → excluded metadata) must NOT emit the unmapped-shape
+// matrix-growth log — that is the noise the §3c mapping removes. Pinning silence
+// guards against a regression that re-floods stderr for these known types.
+func TestCodexMappedTypesNotLogged(t *testing.T) {
+	cases := []struct {
+		name string
+		obj  map[string]any
+	}{
+		{
+			name: "agent_message",
+			obj: map[string]any{
+				"payload": map[string]any{"type": "agent_message", "message": "narrative prose"},
+			},
+		},
+		{
+			name: "token_count",
+			obj: map[string]any{
+				"payload": map[string]any{"type": "token_count", "info": map[string]any{"total_tokens": 10}},
+			},
+		},
+		{
+			name: "task_complete",
+			obj: map[string]any{
+				"payload": map[string]any{"type": "task_complete", "last_agent_message": "done"},
+			},
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			logged := captureStderr(t, func() {
+				_, _ = channelTextPair(tc.obj)
+			})
+			if strings.Contains(logged, "unmapped event shape") {
+				t.Errorf("mapped codex type %q should not log unmapped-shape, got %q", tc.name, logged)
 			}
 		})
 	}

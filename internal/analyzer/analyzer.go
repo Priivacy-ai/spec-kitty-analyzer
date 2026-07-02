@@ -444,7 +444,9 @@ func eventFromText(path string, line, turn int, text string, obj map[string]any)
 	// this returns, before findings aggregation — see channelStringsForEvent and the
 	// parseFile gate comment.
 	outCh, diagCh := channelStringsForEvent(path, text, obj)
-	failures := classifyFailuresWithChannels(outCh, diagCh, obj, cli)
+	// The source kind (from the path, §3d vocabulary) gates the structural
+	// review_rejected detector to spec-kitty live-event streams only.
+	failures := classifyFailuresWithChannels(outCh, diagCh, classifyPathKind(path), obj, cli)
 	kind := "message"
 	switch {
 	case len(failures) > 0:
@@ -498,8 +500,7 @@ func channelStringsForEvent(path, text string, obj map[string]any) (outCh, diagC
 		// the channels.go "unmapped event shape" stderr log twice for one event. The
 		// two strings are byte-identical to the old two-call results: outputText joins
 		// ct.output; diagnosticText joins ct.output followed by ct.narrative.
-		ct := extractChannels(obj)
-		return channelStrings(ct)
+		return channelTextPair(obj)
 	}
 
 	// §3d plain-text model: a raw, non-JSON line has no harness structure to route,

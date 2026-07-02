@@ -69,7 +69,7 @@ func TestFingerprintTaxonomyDiagnosticIsBranchOnly(t *testing.T) {
 // re-broadens scope.
 func TestFingerprintOutputScopedNarrativeNegative(t *testing.T) {
 	narrative := "I think the merge failed because of stale refs; you should resolve the merge conflict next before retrying."
-	failures := classifyFailuresWithChannels("", narrative, nil, nil)
+	failures := classifyFailuresWithChannels("", narrative, "", nil, nil)
 	if len(failures) != 0 {
 		t.Fatalf("output-scoped merge prose classified from narrative-only channel: %#v", failures)
 	}
@@ -99,7 +99,7 @@ func TestFingerprintBranchWorktreeDiagnosticScope(t *testing.T) {
 	// observed condition, "mission targets … branch"). Present only in the diagnostic
 	// channel; the output channel is empty.
 	distinctive := "Branch context check: mission targets 'main' but the agent is on branch 'fix/task-workflow-bug-fixes'."
-	got := classifyFailuresWithChannels("", distinctive, nil, nil)
+	got := classifyFailuresWithChannels("", distinctive, "", nil, nil)
 	if !failureListHas(got, "branch_worktree_confusion") {
 		t.Fatalf("distinctive branch signature must classify from diagnostic narrative: %#v", got)
 	}
@@ -108,26 +108,113 @@ func TestFingerprintBranchWorktreeDiagnosticScope(t *testing.T) {
 	// `wrong (branch|worktree)` output-scoped pattern, so a narrative-only channel
 	// (output empty) must NOT classify — otherwise the FP class returns.
 	broadProse := "When reviewing, you may be on the wrong branch, so double-check before continuing."
-	broad := classifyFailuresWithChannels("", broadProse, nil, nil)
+	broad := classifyFailuresWithChannels("", broadProse, "", nil, nil)
 	if failureListHas(broad, "branch_worktree_confusion") {
 		t.Fatalf("broad branch prose must NOT classify from narrative (its pattern is output-scoped): %#v", broad)
 	}
 
 	// The same broad prose IN the output channel still classifies (the broad pattern
 	// remains an output detector — it was demoted from narrative, not deleted).
-	broadOut := classifyFailuresWithChannels(broadProse, broadProse, nil, nil)
+	broadOut := classifyFailuresWithChannels(broadProse, broadProse, "", nil, nil)
 	if !failureListHas(broadOut, "branch_worktree_confusion") {
 		t.Fatalf("broad branch prose in OUTPUT channel must still classify: %#v", broadOut)
 	}
 
 	// Same signature excluded from BOTH channels (e.g. it only ever lived in a code
 	// edit / file read that WP01 §3a strips) → no classification at all.
-	none := classifyFailuresWithChannels("", "", nil, nil)
+	none := classifyFailuresWithChannels("", "", "", nil, nil)
 	if failureListHas(none, "branch_worktree_confusion") {
 		t.Fatalf("branch_worktree_confusion must not classify when absent from both channels: %#v", none)
 	}
 	if len(none) != 0 {
 		t.Fatalf("empty channels must yield no failures: %#v", none)
+	}
+}
+
+// TestFingerprintReviewRejectedStructural pins fast-follow item A: review_rejected
+// is detected STRUCTURALLY from a JSON status event whose rejection lives in a bare
+// review_status/verdict field with NO output- or narrative-channel text. Under
+// channel scoping the §3c extraction yields empty channels for such an event, so the
+// output-scoped text rule cannot fire — this is the latent false negative the
+// structural path closes. Both channels are empty in these cases to prove detection
+// comes from the obj field, not leaked channel text.
+func TestFingerprintReviewRejectedStructural(t *testing.T) {
+	// (a) Top-level review_status: has_feedback (the wp_lane_changed status event
+	// shape) with empty channels → structural detection.
+	topLevel := map[string]any{
+		"event_type":    "wp_lane_changed",
+		"wp_id":         "WP01",
+		"review_status": "has_feedback",
+	}
+	if got := classifyFailuresWithChannels("", "", "mission_status_events", topLevel, nil); !failureListHas(got, "review_rejected") {
+		t.Fatalf("top-level review_status=has_feedback must classify review_rejected structurally: %#v", got)
+	}
+
+	// (b) Nested evidence.review.verdict: rejected (the review-evidence shape;
+	// nestedString descends the explicit evidence.review.verdict path) with empty
+	// channels → structural detection.
+	nested := map[string]any{
+		"evidence": map[string]any{
+			"review": map[string]any{"reviewer": "X", "verdict": "rejected"},
+		},
+	}
+	if got := classifyFailuresWithChannels("", "", "mission_status_events", nested, nil); !failureListHas(got, "review_rejected") {
+		t.Fatalf("nested verdict=rejected must classify review_rejected structurally: %#v", got)
+	}
+
+	// (c) verdict: approved must NOT classify — the structural rule fires only on a
+	// rejection value, mirroring the text rule.
+	approved := map[string]any{
+		"evidence": map[string]any{"review": map[string]any{"verdict": "approved"}},
+	}
+	if got := classifyFailuresWithChannels("", "", "mission_status_events", approved, nil); failureListHas(got, "review_rejected") {
+		t.Fatalf("verdict=approved must NOT classify review_rejected: %#v", got)
+	}
+
+	// (c2) review #1 guard: an event that is APPROVED now but carries a stale/historical
+	// "rejected" verdict elsewhere (here under history[]) must NOT classify. The
+	// detector matches only the explicit current paths (top-level review_status,
+	// evidence.review.verdict); a whole-object recursive search would mis-fire on the
+	// stale value AND be order-nondeterministic (FR-006).
+	staleHistory := map[string]any{
+		"to_lane":  "approved",
+		"evidence": map[string]any{"review": map[string]any{"verdict": "approved"}},
+		"history": []any{
+			map[string]any{"review": map[string]any{"verdict": "rejected", "reference": "old cycle"}},
+		},
+	}
+	if got := classifyFailuresWithChannels("", "", "mission_status_events", staleHistory, nil); failureListHas(got, "review_rejected") {
+		t.Fatalf("stale historical verdict=rejected must NOT classify (only current paths count): %#v", got)
+	}
+
+	// (d) Dedup: an event matched by BOTH the structural field AND the output-channel
+	// text rule yields EXACTLY ONE review_rejected finding (seen[] guard).
+	both := map[string]any{"review_status": "has_feedback"}
+	got := classifyFailuresWithChannels("review_status: has_feedback", "review_status: has_feedback", "mission_status_events", both, nil)
+	count := 0
+	for _, f := range got {
+		if f.ID == "review_rejected" {
+			count++
+		}
+	}
+	if count != 1 {
+		t.Fatalf("review_rejected must appear exactly once when both structural and text paths match; count=%d, %#v", count, got)
+	}
+
+	// (e) SOURCE-KIND GATE: the exact same rejection fields, but delivered from a
+	// non-live-event source, must NOT classify structurally. review_status/verdict are
+	// generic field names; without this gate a plain .json input carrying them would
+	// mint a false review_rejected (the FP path Codex flagged). The gate admits only
+	// "mission_status_events" (the status.events.jsonl event log). "op_jsonl" is
+	// EXCLUDED on purpose — classifyPathKind returns it for any file under kitty-ops/,
+	// not just an op-event stream, so gating on it would reopen the same FP class.
+	for _, kind := range []string{"json", "jsonl_transcript", "op_jsonl", "mission_meta", ""} {
+		if got := classifyFailuresWithChannels("", "", kind, topLevel, nil); failureListHas(got, "review_rejected") {
+			t.Fatalf("review_status=has_feedback from non-live-event kind %q must NOT classify structurally: %#v", kind, got)
+		}
+		if got := classifyFailuresWithChannels("", "", kind, nested, nil); failureListHas(got, "review_rejected") {
+			t.Fatalf("verdict=rejected from non-live-event kind %q must NOT classify structurally: %#v", kind, got)
+		}
 	}
 }
 
@@ -137,13 +224,13 @@ func TestFingerprintBranchWorktreeDiagnosticScope(t *testing.T) {
 // distinctive git signature in output must classify.
 func TestFingerprintOutputScopedClassifiesFromOutput(t *testing.T) {
 	output := "Automatic merge failed; fix conflicts and then commit the result."
-	got := classifyFailuresWithChannels(output, output, nil, nil)
+	got := classifyFailuresWithChannels(output, output, "", nil, nil)
 	if !failureListHas(got, "merge_conflict") {
 		t.Fatalf("merge_conflict must classify from output channel: %#v", got)
 	}
 	// The same git output present only in the narrative channel must NOT classify
 	// (output-scoped patterns ignore diagnosticText-only content).
-	narrativeOnly := classifyFailuresWithChannels("", output, nil, nil)
+	narrativeOnly := classifyFailuresWithChannels("", output, "", nil, nil)
 	if failureListHas(narrativeOnly, "merge_conflict") {
 		t.Fatalf("merge_conflict must not classify from narrative-only channel: %#v", narrativeOnly)
 	}

@@ -512,6 +512,78 @@ func TestArtifactSuppressionAllFourKinds(t *testing.T) {
 	}
 }
 
+// TestReviewRejectedStructuralEndToEndStatusEvents is the integration guard for
+// fast-follow item A. It drives the FULL pipeline (parseFile -> path-kind
+// classification -> eventFromJSONObject -> classify -> skipArtifactMessage gate ->
+// findings) from a status.events.jsonl source — kind mission_status_events, which is
+// NOT an artifact kind, so the gate must let review_rejected through. The unit test
+// (TestFingerprintReviewRejectedStructural) exercises the classifier directly; this
+// covers the integration layer it skips (the layer where the Codex whitelist/gate
+// finding lived). A rejection recorded as a bare structural field with no channel text
+// is invisible to the pre-A channel scanner (baseline false negative); the structural
+// detector must recover exactly the two rejection events and ignore the approval.
+func TestReviewRejectedStructuralEndToEndStatusEvents(t *testing.T) {
+	path := "repo/kitty-specs/demo/status.events.jsonl"
+	lines := []string{
+		// Rejection #1: top-level review_status on a wp_lane_changed status event.
+		`{"event_type":"wp_lane_changed","wp_id":"WP01","to_lane":"planned","review_status":"has_feedback"}`,
+		// Rejection #2: nested evidence.review.verdict on a review-evidence event.
+		`{"event_id":"x","evidence":{"review":{"reviewer":"K","verdict":"rejected"}},"wp_id":"WP02"}`,
+		// Not a rejection: an approved verdict must NOT classify.
+		`{"event_id":"y","evidence":{"review":{"reviewer":"K","verdict":"approved"}},"wp_id":"WP03"}`,
+	}
+	data := strings.Join(lines, "\n") + "\n"
+
+	events, _ := parseFile(path, "mission_status_events", []byte(data), 0, newBuildState())
+	n := 0
+	for _, e := range events {
+		if failureListHas(e.Failures, "review_rejected") {
+			n++
+		}
+	}
+	if n != 2 {
+		t.Fatalf("review_rejected must surface end-to-end on exactly the 2 rejection events (has_feedback + verdict:rejected), not the approval; got %d. events=%#v", n, events)
+	}
+}
+
+// TestReviewRejectedStructuralNotFiredOnNonEventSources is the negative guard for
+// fast-follow item A's SOURCE-KIND gate. Item A detects review_rejected structurally
+// from a bare review_status/verdict JSON field, but those are generic-enough field
+// names that a plain .json file, a harness transcript, or an artifact SNAPSHOT that
+// merely stores review state could carry them. The detector is gated
+// (isStructuralReviewEventKind) to spec-kitty live-event streams only, so none of
+// those non-event sources may surface review_rejected end-to-end — a real
+// false-positive path if the gate regresses. Note this is closed at DETECTION time
+// (kind gate), independent of the artifact whitelist, which is why a generic "json"
+// file (NOT an artifact kind, so never whitelist-gated) is included. The positive
+// live-event and work_package paths are covered by
+// TestReviewRejectedStructuralEndToEndStatusEvents and TestArtifactReviewRejectedWhitelist.
+func TestReviewRejectedStructuralNotFiredOnNonEventSources(t *testing.T) {
+	data := `{"review_status":"has_feedback"}`
+	nonEvent := []struct{ name, kind, path string }{
+		// Generic .json file — NOT an artifact kind, so the whitelist would never gate
+		// it; only the source-kind detection gate keeps review_rejected off it.
+		{"generic_json", "json", "repo/data/some-config.json"},
+		{"jsonl_transcript", "jsonl_transcript", "repo/logs/session.jsonl"},
+		// A non-event file under kitty-ops/ classifies as op_jsonl (classifyPathKind
+		// keys on the path segment, not the extension), but op_jsonl is NOT a gated
+		// live-event kind — so it must not surface review_rejected either.
+		{"kitty_ops_nonevent", "op_jsonl", "repo/kitty-ops/notes.json"},
+		// Artifact snapshots that STORE review state rather than emit a live rejection.
+		{"mission_meta", "mission_meta", "repo/kitty-specs/sample/meta.json"},
+		{"mission_status_snapshot", "mission_status_snapshot", "repo/kitty-specs/sample/status.json"},
+		{"mission_artifact", "mission_artifact", "repo/kitty-specs/sample/spec.md.json"},
+	}
+	for _, c := range nonEvent {
+		events, _ := parseFile(c.path, c.kind, []byte(data+"\n"), 0, newBuildState())
+		for _, e := range events {
+			if failureListHas(e.Failures, "review_rejected") {
+				t.Fatalf("%s: structural review_rejected must NOT surface from a non-live-event source; got %#v", c.name, e.Failures)
+			}
+		}
+	}
+}
+
 // TestArtifactReviewRejectedWhitelist proves WP frontmatter review_rejected survives
 // while neighboring artifact diagnostic failures are still suppressed.
 func TestArtifactReviewRejectedWhitelist(t *testing.T) {
