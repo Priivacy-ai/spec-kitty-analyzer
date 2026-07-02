@@ -1,7 +1,9 @@
 package analyzer
 
 import (
+	"encoding/json"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 )
@@ -78,6 +80,30 @@ func TestMissionHandleNormalizationRejectsNoise(t *testing.T) {
 	}
 	if got := normalizeMissionHandle("01KV69BZEHXDSGGMR6J3QN0J2E"); got != "" {
 		t.Fatalf("standalone mission id normalized to %q want empty", got)
+	}
+}
+
+func TestClassifyPathKindUsesKittySegments(t *testing.T) {
+	cases := []struct {
+		path string
+		want string
+	}{
+		{"kitty-specs/sample/tasks/WP01.md", "work_package"},
+		{"repo/kitty-specs/sample/tasks/WP01.md", "work_package"},
+		{"/tmp/repo/kitty-specs/sample/status.events.jsonl", "mission_status_events"},
+		{"kitty-ops/01KTEST.jsonl", "op_jsonl"},
+		{"notkitty-specs/sample/tasks/WP01.md", "text"},
+	}
+	for _, c := range cases {
+		if got := classifyPathKind(c.path); got != c.want {
+			t.Fatalf("classifyPathKind(%q)=%q want %q", c.path, got, c.want)
+		}
+	}
+
+	path := "kitty-specs/sample/tasks/WP01.md"
+	events, _ := parseFile(path, classifyPathKind(path), []byte("---\nreview_status: has_feedback\n---\n"), 0, newBuildState())
+	if len(events) == 0 || !failureListHas(events[0].Failures, "review_rejected") {
+		t.Fatalf("root-relative work package frontmatter must surface review_rejected; events=%#v", events)
 	}
 }
 
@@ -274,6 +300,310 @@ func TestWindowsPermissionDeniedSignatures(t *testing.T) {
 	eio := classifyFailures(`Error: Input/output error (os error 5)`, nil, nil)
 	if failureListHas(eio, "permission_denied") {
 		t.Fatalf("Unix EIO misclassified as permission_denied: failures=%#v", eio)
+	}
+}
+
+// TestIssue4FourWayReproThroughEvent is the headline acceptance test (Contract B).
+// The SAME signature `AssertionError` appears in four channels of an event; only the
+// stderr (output) line is a real failure once the event is wired through the channel
+// extraction (WP01) + scoped classification (WP02). This exercises the WP03 wiring
+// end to end via eventFromJSONObject (T014/T017a).
+func TestIssue4FourWayReproThroughEvent(t *testing.T) {
+	cases := []struct {
+		name     string
+		obj      map[string]any
+		wantFail bool
+		wantID   string
+	}{
+		{
+			name: "assistant_message_text_narrative",
+			obj: map[string]any{
+				"type": "assistant",
+				"message": map[string]any{
+					"role": "assistant",
+					"content": []any{
+						map[string]any{"type": "text", "text": "Catch the AssertionError and log it before re-raising."},
+					},
+				},
+			},
+			wantFail: false,
+		},
+		{
+			name: "edit_new_string_excluded",
+			obj: map[string]any{
+				"toolUseResult": map[string]any{
+					"filePath":        "/repo/tests/test_x.py",
+					"oldString":       "pass",
+					"newString":       "raise AssertionError('boom')",
+					"structuredPatch": []any{},
+				},
+			},
+			wantFail: false,
+		},
+		{
+			name: "codex_reasoning_narrative",
+			obj: map[string]any{
+				"payload": map[string]any{
+					"type": "reasoning",
+					"content": []any{
+						map[string]any{"type": "text", "text": "Handle AssertionError defensively in the harness."},
+					},
+				},
+			},
+			wantFail: false,
+		},
+		{
+			name: "tool_use_result_stderr_output",
+			obj: map[string]any{
+				"toolUseResult": map[string]any{
+					"stdout": "",
+					"stderr": "E       AssertionError: boom",
+				},
+			},
+			wantFail: true,
+			wantID:   "test_failure",
+		},
+	}
+	for _, c := range cases {
+		ev := eventFromJSONObject("session.jsonl", 1, 1, c.obj)
+		got := len(ev.Failures) > 0
+		if got != c.wantFail {
+			t.Errorf("%s: failures=%#v want failure=%v", c.name, ev.Failures, c.wantFail)
+			continue
+		}
+		if c.wantFail {
+			if len(ev.Failures) != 1 || ev.Failures[0].ID != c.wantID {
+				t.Errorf("%s: failures=%#v want exactly [%s]", c.name, ev.Failures, c.wantID)
+			}
+		}
+	}
+}
+
+// TestObjNilChannelRouting covers the §3d plain-text model (Contract D) through
+// the event path (T015/T017b).
+func TestObjNilChannelRouting(t *testing.T) {
+	// Contract D row 1: an artifact/spec line that merely discusses an error is
+	// diagnostic-only, so output-scoped failure patterns never see it.
+	artifactPath := "repo/kitty-specs/sample/research.md"
+	proseLine := "The pytest run reported AssertionError: boom and exited with exit code 1."
+	artifactOut, artifactDiag := channelStringsForEvent(artifactPath, proseLine, nil)
+	if artifactOut != "" || !strings.Contains(artifactDiag, "AssertionError") {
+		t.Fatalf("artifact prose must be diagnostic-only; out=%q diag=%q", artifactOut, artifactDiag)
+	}
+	preGate := eventFromText(artifactPath, 1, 1, proseLine, nil)
+	if len(preGate.Failures) != 0 {
+		t.Fatalf("artifact prose must not classify output-scoped failures pre-gate; got %#v", preGate.Failures)
+	}
+	events, _ := parseFile(artifactPath, "mission_artifact", []byte(proseLine+"\n"), 0, newBuildState())
+	for _, e := range events {
+		if len(e.Failures) > 0 {
+			t.Fatalf("artifact prose surfaced a failure end-to-end: %#v", e.Failures)
+		}
+	}
+
+	// The one whitelisted artifact signal — review_rejected on WP frontmatter — must
+	// still surface via the frontmatter detector, not artifact-wide output routing.
+	wpData := []byte("---\nreview_status: has_feedback\n---\n")
+	wpEvents, _ := parseFile("repo/kitty-specs/sample/tasks/WP01.md", "work_package", wpData, 0, newBuildState())
+	foundReview := false
+	for _, e := range wpEvents {
+		if failureListHas(e.Failures, "review_rejected") {
+			foundReview = true
+		}
+	}
+	if !foundReview {
+		t.Fatalf("whitelisted review_rejected must survive on WP frontmatter; events=%#v", wpEvents)
+	}
+
+	researchEvents, _ := parseFile("repo/kitty-specs/sample/research.md", "mission_artifact", []byte("review_status: has_feedback\n"), 0, newBuildState())
+	for _, e := range researchEvents {
+		if failureListHas(e.Failures, "review_rejected") {
+			t.Fatalf("research prose mentioning review_status must not surface review_rejected; events=%#v", researchEvents)
+		}
+	}
+	researchJSON := []byte(`{"toolUseResult":{"stdout":"review_status: has_feedback"}}` + "\n")
+	researchJSONEvents, _ := parseFile("repo/kitty-specs/sample/research.md", "mission_artifact", researchJSON, 0, newBuildState())
+	for _, e := range researchJSONEvents {
+		if failureListHas(e.Failures, "review_rejected") {
+			t.Fatalf("research JSON output mentioning review_status must not surface review_rejected; events=%#v", researchJSONEvents)
+		}
+	}
+	wpBodyJSONEvents, _ := parseFile("repo/kitty-specs/sample/tasks/WP01.md", "work_package", researchJSON, 0, newBuildState())
+	for _, e := range wpBodyJSONEvents {
+		if failureListHas(e.Failures, "review_rejected") {
+			t.Fatalf("WP non-frontmatter JSON output mentioning review_status must not surface review_rejected; events=%#v", wpBodyJSONEvents)
+		}
+	}
+
+	// Contract D row 2: a transcript-derived stray non-JSON line carrying real output
+	// failure text is output-eligible and classifies.
+	out, diag := channelStringsForEvent("session.jsonl", "AssertionError: boom", nil)
+	if out == "" || diag == "" {
+		t.Fatalf("transcript stray line must be output-eligible; out=%q diag=%q", out, diag)
+	}
+	strayEv := eventFromText("session.jsonl", 1, 1, "AssertionError: boom", nil)
+	if !failureListHas(strayEv.Failures, "test_failure") {
+		t.Fatalf("transcript stray failure=%#v want test_failure", strayEv.Failures)
+	}
+
+	// Direct .log files are command-output logs and remain output-eligible.
+	logOut, logDiag := channelStringsForEvent("build.log", "AssertionError: boom", nil)
+	if logOut == "" || logDiag == "" {
+		t.Fatalf(".log command output must be output-eligible; out=%q diag=%q", logOut, logDiag)
+	}
+	logEv := eventFromText("build.log", 1, 1, "AssertionError: boom", nil)
+	if !failureListHas(logEv.Failures, "test_failure") {
+		t.Fatalf(".log command output must classify output failures; got %#v", logEv.Failures)
+	}
+
+	// Generic standalone .txt remains unsupported: no source kind proves it is command
+	// output rather than prose.
+	txtOut, txtDiag := channelStringsForEvent("notes.txt", "AssertionError: boom", nil)
+	if txtOut != "" || txtDiag != "" {
+		t.Fatalf("generic .txt must remain unsupported; out=%q diag=%q", txtOut, txtDiag)
+	}
+	txtEv := eventFromText("notes.txt", 1, 1, "AssertionError: boom", nil)
+	if len(txtEv.Failures) != 0 {
+		t.Fatalf("generic .txt must not classify; got %#v", txtEv.Failures)
+	}
+}
+
+// TestArtifactSuppressionAllFourKinds covers Codex cycle-2 Fix 1: artifact-failure
+// suppression must apply UNIFORMLY across all four artifact kinds, not just
+// work_package/mission_artifact. A mission_meta (meta.json) and a
+// mission_status_snapshot (status.json) each carrying a failure signature must reach
+// findings with ZERO failures. Pre-gate the same object classifies, proving the gate
+// (not a missing match) is what suppresses it.
+func TestArtifactSuppressionAllFourKinds(t *testing.T) {
+	cases := []struct {
+		name string
+		kind string
+		path string
+		data string
+	}{
+		{
+			name: "mission_meta",
+			kind: "mission_meta",
+			path: "repo/kitty-specs/sample/meta.json",
+			data: `{"error":"AssertionError: boom"}`,
+		},
+		{
+			name: "mission_status_snapshot",
+			kind: "mission_status_snapshot",
+			path: "repo/kitty-specs/sample/status.json",
+			data: `{"error":"AssertionError: boom"}`,
+		},
+	}
+	for _, c := range cases {
+		obj, ok := decodeJSONObject([]byte(c.data))
+		if !ok {
+			t.Fatalf("%s: test JSON did not decode", c.name)
+		}
+		preGate := eventFromJSONObject(c.path, 1, 1, obj)
+		if len(preGate.Failures) == 0 {
+			t.Fatalf("%s: object should classify a failure pre-gate (else the test proves nothing); got none", c.name)
+		}
+		events, _ := parseFile(c.path, c.kind, []byte(c.data+"\n"), 0, newBuildState())
+		for _, e := range events {
+			if len(e.Failures) > 0 {
+				t.Fatalf("%s: artifact kind leaked a failure end-to-end: %#v", c.name, e.Failures)
+			}
+		}
+	}
+}
+
+// TestArtifactReviewRejectedWhitelist proves WP frontmatter review_rejected survives
+// while neighboring artifact diagnostic failures are still suppressed.
+func TestArtifactReviewRejectedWhitelist(t *testing.T) {
+	data := []byte("---\nreview_status: has_feedback\nnote: mission targets main branch\n---\n")
+	wpPath := "repo/kitty-specs/sample/tasks/WP02.md"
+
+	events, _ := parseFile(wpPath, "work_package", data, 0, newBuildState())
+	var got []FailureFingerprint
+	for _, e := range events {
+		got = append(got, e.Failures...)
+	}
+	if len(got) != 1 || got[0].ID != "review_rejected" {
+		t.Fatalf("exactly review_rejected must survive artifact suppression; got %#v", got)
+	}
+}
+
+func TestArtifactReviewRejectedTitle(t *testing.T) {
+	wpPath := "repo/kitty-specs/sample/tasks/WP03.md"
+	events, _ := parseFile(wpPath, "work_package", []byte("---\nreview_status: has_feedback\n---\n"), 0, newBuildState())
+	var surviving []TimelineEvent
+	for _, e := range events {
+		if len(e.Failures) > 0 {
+			surviving = append(surviving, e)
+		}
+	}
+	if len(surviving) != 1 {
+		t.Fatalf("exactly one surviving failure event expected; got %#v", surviving)
+	}
+	e := surviving[0]
+	if len(e.Failures) != 1 || e.Failures[0].ID != "review_rejected" {
+		t.Fatalf("exactly review_rejected must survive; got %#v", e.Failures)
+	}
+	if e.Title != "Review rejected work package" {
+		t.Fatalf("title must match review_rejected; got %q", e.Title)
+	}
+}
+
+// TestContractCThroughEvent confirms the no-regression invariant (Contract C / SC-002)
+// through the event path: the distinctive branch_worktree_confusion narrative still
+// classifies (diagnostic-scoped), while generic output-scoped prose in narrative does
+// not, and the same signature in command output does (T017c).
+func TestContractCThroughEvent(t *testing.T) {
+	narrative := func(text string) map[string]any {
+		return map[string]any{
+			"message": map[string]any{
+				"content": []any{map[string]any{"type": "text", "text": text}},
+			},
+		}
+	}
+
+	// Distinctive branch_worktree_confusion narrative → still classified (diagnostic).
+	bwc := eventFromJSONObject("session.jsonl", 1, 1, narrative(
+		"You are on branch 'fix/foo' but the mission targets the 'main' branch. No auto-detection is performed for the branch."))
+	if !failureListHas(bwc.Failures, "branch_worktree_confusion") {
+		t.Fatalf("narrative branch_worktree_confusion regressed: %#v", bwc.Failures)
+	}
+
+	// Generic output-scoped prose in narrative → NOT classified (merge_operation_failed
+	// and merge_conflict are output-scoped; narrative is not output).
+	mergeProse := eventFromJSONObject("session.jsonl", 1, 1, narrative(
+		"The merge failed earlier so let us resolve the merge conflict next."))
+	if len(mergeProse.Failures) != 0 {
+		t.Fatalf("generic merge prose in narrative must not classify: %#v", mergeProse.Failures)
+	}
+
+	// CONFLICT in command output → classified (output-scoped).
+	conflictOut := eventFromJSONObject("session.jsonl", 1, 1, map[string]any{
+		"toolUseResult": map[string]any{"stdout": "Auto-merging x\nCONFLICT (content): Merge conflict in x\n", "stderr": ""},
+	})
+	if !failureListHas(conflictOut.Failures, "merge_conflict") {
+		t.Fatalf("CONFLICT in output must classify merge_conflict: %#v", conflictOut.Failures)
+	}
+}
+
+// TestChannelCacheNotSerialized pins NFR-003: the cached channel strings are
+// in-memory only and never leak into the serialized report schema.
+func TestChannelCacheNotSerialized(t *testing.T) {
+	ev := eventFromJSONObject("session.jsonl", 1, 1, map[string]any{
+		"toolUseResult": map[string]any{"stderr": "AssertionError: boom"},
+	})
+	if ev.outputCh == "" || ev.diagnosticCh == "" {
+		t.Fatalf("expected cached channel strings populated; outputCh=%q diagnosticCh=%q", ev.outputCh, ev.diagnosticCh)
+	}
+	b, err := json.Marshal(ev)
+	if err != nil {
+		t.Fatalf("marshal failed: %v", err)
+	}
+	s := string(b)
+	for _, leak := range []string{"outputCh", "diagnosticCh", "output_text", "diagnostic_text", "outputText", "diagnosticText"} {
+		if strings.Contains(s, leak) {
+			t.Fatalf("serialized event leaked channel cache key %q: %s", leak, s)
+		}
 	}
 }
 

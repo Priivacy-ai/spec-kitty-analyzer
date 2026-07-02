@@ -198,20 +198,6 @@ func jsonHasError(obj map[string]any) bool {
 	return status == "failed" || status == "failure" || status == "blocked" || status == "rejected" || status == "error"
 }
 
-func jsonLooksLikeSourceRead(obj map[string]any) bool {
-	result, ok := obj["toolUseResult"].(map[string]any)
-	if !ok {
-		return false
-	}
-	file, ok := result["file"].(map[string]any)
-	if !ok {
-		return false
-	}
-	_, hasContent := file["content"].(string)
-	_, hasPath := file["filePath"].(string)
-	return hasContent && hasPath
-}
-
 func parseJSONTime(obj map[string]any) *time.Time {
 	raw := firstJSONStringByKey(obj, "timestamp", "created_at", "updated_at", "started_at", "completed_at", "time", "ts")
 	if raw == "" {

@@ -1,0 +1,42 @@
+{
+  "event_count": 51,
+  "last_event_id": "01KW2ZQRQRAXTMENGNZP66EFT3",
+  "materialized_at": "2026-06-26T22:10:21.560180+00:00",
+  "mission_number": "1",
+  "mission_slug": "failure-scan-channel-scoping-01KW2HBG",
+  "mission_type": "software-dev",
+  "summary": {
+    "approved": 0,
+    "blocked": 0,
+    "canceled": 0,
+    "claimed": 0,
+    "done": 3,
+    "for_review": 0,
+    "in_progress": 0,
+    "in_review": 0,
+    "planned": 0
+  },
+  "work_packages": {
+    "WP01": {
+      "actor": "merge",
+      "force_count": 3,
+      "lane": "done",
+      "last_event_id": "01KW2ZQMN4CN2HVHPV419Q5JY6",
+      "last_transition_at": "2026-06-26T22:10:17.380594+00:00"
+    },
+    "WP02": {
+      "actor": "merge",
+      "force_count": 1,
+      "lane": "done",
+      "last_event_id": "01KW2ZQPV5ZWJ25ZF9PFH33CWY",
+      "last_transition_at": "2026-06-26T22:10:19.621619+00:00"
+    },
+    "WP03": {
+      "actor": "merge",
+      "force_count": 2,
+      "lane": "done",
+      "last_event_id": "01KW2ZQRQRAXTMENGNZP66EFT3",
+      "last_transition_at": "2026-06-26T22:10:21.560180+00:00"
+    }
+  }
+}

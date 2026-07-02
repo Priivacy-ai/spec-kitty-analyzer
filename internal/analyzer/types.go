@@ -70,6 +70,16 @@ type TimelineEvent struct {
 	AgentProfiles  []AgentProfileUse    `json:"agent_profiles"`
 	Failures       []FailureFingerprint `json:"failures"`
 	RawJSONKeys    []string             `json:"raw_json_keys,omitempty"`
+
+	// outputCh / diagnosticCh cache the two §3c channel strings derived ONCE per
+	// event (design issue-4 §5; WP03/T013): outputCh = real command/tool output +
+	// structured error text; diagnosticCh = output ∪ narrative. They are the exact
+	// strings the scoped failure rules matched against, retained so a later pass
+	// (e.g. the Tier-3 anomaly trap, separate PR) can reuse them without a second
+	// extraction walk. UNEXPORTED on purpose: encoding/json never serializes them,
+	// so the report schema / report.version is unchanged (NFR-003). In-memory only.
+	outputCh     string
+	diagnosticCh string
 }
 
 type SlashCommand struct {

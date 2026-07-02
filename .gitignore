@@ -50,3 +50,7 @@ report.pdf
 .kittify/runtime/
 .kittify/sync-state.json
 .kittify/workspaces/
+.worktrees/
+
+# stray analyzer output when analyze is run without --out
+spec-kitty-analyzer-report.json

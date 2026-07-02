@@ -1,0 +1,67 @@
+{
+  "version": 1,
+  "mission_slug": "failure-scan-channel-scoping-01KW2HBG",
+  "mission_id": "01KW2HBGQ1GPVGF2JY82MH30QF",
+  "mission_branch": "kitty/mission-failure-scan-channel-scoping-01KW2HBG",
+  "target_branch": "fix/failure-scan-channel-scoping",
+  "lanes": [
+    {
+      "lane_id": "lane-a",
+      "wp_ids": [
+        "WP01"
+      ],
+      "write_scope": [
+        "internal/analyzer/channels.go",
+        "internal/analyzer/channels_test.go"
+      ],
+      "predicted_surfaces": [
+        "api"
+      ],
+      "depends_on_lanes": [],
+      "parallel_group": 0
+    },
+    {
+      "lane_id": "lane-b",
+      "wp_ids": [
+        "WP02"
+      ],
+      "write_scope": [
+        "internal/analyzer/fingerprints.go",
+        "internal/analyzer/fingerprints_test.go"
+      ],
+      "predicted_surfaces": [
+        "api",
+        "artifact-rendering",
+        "tracker-integration"
+      ],
+      "depends_on_lanes": [
+        "lane-a"
+      ],
+      "parallel_group": 1
+    },
+    {
+      "lane_id": "lane-c",
+      "wp_ids": [
+        "WP03"
+      ],
+      "write_scope": [
+        "internal/analyzer/analyzer.go",
+        "internal/analyzer/analyzer_test.go",
+        "internal/analyzer/types.go"
+      ],
+      "predicted_surfaces": [
+        "api",
+        "artifact-rendering",
+        "workspace"
+      ],
+      "depends_on_lanes": [
+        "lane-a",
+        "lane-b"
+      ],
+      "parallel_group": 2
+    }
+  ],
+  "computed_at": "2026-06-26T18:20:44.781523+00:00",
+  "computed_from": "dependency_graph+ownership",
+  "planning_artifact_wps": []
+}

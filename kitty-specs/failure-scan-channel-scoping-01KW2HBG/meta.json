@@ -1,0 +1,19 @@
+{
+  "baseline_merge_commit": "aad49fbdd9f60aa026598232fe03c46f795357d7",
+  "coordination_branch": "kitty/mission-failure-scan-channel-scoping-01KW2HBG",
+  "created_at": "2026-06-26T17:59:00.066894+00:00",
+  "flattened": false,
+  "friendly_name": "Scope failure detection to real channels",
+  "mission_id": "01KW2HBGQ1GPVGF2JY82MH30QF",
+  "mission_number": 1,
+  "mission_slug": "failure-scan-channel-scoping-01KW2HBG",
+  "mission_type": "software-dev",
+  "pr_bound": true,
+  "purpose_context": "The analyzer flags any event whose text mentions an error pattern (narrative, code edits, reasoning) as a real failure, inflating counts and undermining trust. This mission scopes detection to genuine output plus a few distinctive diagnostic signals, so reported failures reflect what truly occurred, without losing valid detections like branch/worktree confusion.",
+  "purpose_tldr": "Stop the analyzer reporting failures that were only discussed or written in code, not actually executed.",
+  "slug": "failure-scan-channel-scoping-01KW2HBG",
+  "target_branch": "fix/failure-scan-channel-scoping",
+  "topology": "coord",
+  "vcs": "git",
+  "vcs_locked_at": "2026-06-26T18:58:54.743353+00:00"
+}
