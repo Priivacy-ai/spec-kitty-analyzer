@@ -546,6 +546,43 @@ func TestReviewRejectedStructuralEndToEndStatusEvents(t *testing.T) {
 	}
 }
 
+// TestReviewRejectedStructuralSuppressedOnArtifactSnapshots is the negative guard
+// for fast-follow item A's interaction with the artifact whitelist. Item A makes the
+// classifier detect review_rejected STRUCTURALLY from a bare review_status/verdict
+// JSON field, so a mission_meta / mission_status_snapshot / mission_artifact whose
+// JSON merely STORES or snapshots review state (history, references) now classifies
+// review_rejected PRE-gate. Those are not live rejections and must be SUPPRESSED
+// end-to-end: only a work_package may surface review_rejected, and only from its
+// frontmatter detector (artifactFailureAllowed keys on kind==work_package AND the
+// frontmatter reason). The pre-gate assertion proves the gate — not a missing
+// classification — is what drops it. The positive work_package/status-event paths are
+// covered by TestArtifactReviewRejectedWhitelist and
+// TestReviewRejectedStructuralEndToEndStatusEvents.
+func TestReviewRejectedStructuralSuppressedOnArtifactSnapshots(t *testing.T) {
+	data := `{"review_status":"has_feedback"}`
+	obj, ok := decodeJSONObject([]byte(data))
+	if !ok {
+		t.Fatalf("test JSON did not decode")
+	}
+	if pre := eventFromJSONObject("repo/kitty-specs/sample/status.json", 1, 1, obj); !failureListHas(pre.Failures, "review_rejected") {
+		t.Fatalf("pre-gate object must classify review_rejected structurally (else the test proves nothing); got %#v", pre.Failures)
+	}
+
+	suppressed := []struct{ name, kind, path string }{
+		{"mission_meta", "mission_meta", "repo/kitty-specs/sample/meta.json"},
+		{"mission_status_snapshot", "mission_status_snapshot", "repo/kitty-specs/sample/status.json"},
+		{"mission_artifact", "mission_artifact", "repo/kitty-specs/sample/spec.md.json"},
+	}
+	for _, c := range suppressed {
+		events, _ := parseFile(c.path, c.kind, []byte(data+"\n"), 0, newBuildState())
+		for _, e := range events {
+			if failureListHas(e.Failures, "review_rejected") {
+				t.Fatalf("%s: structural review_rejected must be suppressed (whitelist is work_package + frontmatter-reason only); got %#v", c.name, e.Failures)
+			}
+		}
+	}
+}
+
 // TestArtifactReviewRejectedWhitelist proves WP frontmatter review_rejected survives
 // while neighboring artifact diagnostic failures are still suppressed.
 func TestArtifactReviewRejectedWhitelist(t *testing.T) {
