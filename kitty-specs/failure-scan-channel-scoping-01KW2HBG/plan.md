@@ -86,7 +86,7 @@ kitty-specs/failure-scan-channel-scoping-01KW2HBG/
 ```
 internal/analyzer/
 ├── fingerprints.go      # failureRule/pattern types, failureRules table, classifyFailures, genericFailureSignal
-├── json_helpers.go      # flattenJSON, jsonLooksLikeSourceRead → generalized channel extraction
+├── json_helpers.go      # flattenJSON helpers
 ├── analyzer.go          # eventFromJSONObject / eventFromText, skipArtifactMessage (ordering)
 └── analyzer_test.go     # table-driven unit + golden + regression tests
 ```
@@ -108,7 +108,7 @@ import cycle, no exported surface change).
 
 - **Purpose**: Produce, for one event, the text belonging to each channel class (`output`, `narrative`) with code-edit/file-read content excluded — the single source the text rules scan.
 - **Relevant requirements**: FR-001, FR-004, FR-005.
-- **Affected surfaces**: `internal/analyzer/json_helpers.go` (generalize `jsonLooksLikeSourceRead`; add extraction), possibly a new `internal/analyzer/channels.go`; `analyzer.go` event build.
+- **Affected surfaces**: `internal/analyzer/channels.go` (generalized source-read/code-edit exclusion); `analyzer.go` event build.
 - **Sequencing/depends-on**: none (foundation).
 - **Risks**: harness-shape coverage (Claude message / `toolUseResult` string+struct / `tool_result` blocks / Edit-Write / Read / codex `payload` variants); JSON-string re-decode; unmapped shapes must default to excluded-from-output and be logged, never silently treated as output.
 
@@ -122,7 +122,7 @@ import cycle, no exported surface change).
 
 ### IC-03 — `obj == nil` artifact-vs-transcript model
 
-- **Purpose**: Classify plain-text (non-JSON) lines correctly — artifact/spec kinds as `diagnostic`-only; transcript text output-eligible; generic `.log` declared unsupported.
+- **Purpose**: Classify plain-text (non-JSON) lines correctly — artifact/spec kinds as `diagnostic`-only; transcript text and `.log` command logs output-eligible; generic `.txt`/`.md`/`.yaml` unsupported.
 - **Relevant requirements**: FR-004.
 - **Affected surfaces**: `analyzer.go` (`eventFromText` nil path, source-kind detection, `skipArtifactMessage` interaction).
 - **Sequencing/depends-on**: IC-01.

@@ -80,7 +80,7 @@ and `classifyFailures` scans each pattern only against the text for its scope.
 - **Authoritative design**: `docs/design/issue-4-failure-scan-channel-scoping.md` §3b, §4, §5, §6. The §4 taxonomy table is the contract for which pattern gets which scope.
 - Mission docs: `plan.md` (IC-02), `data-model.md` (Pattern/FailureRule refined), `contracts/channel-classification.md` (Contracts A & C), `research.md` (Decisions 1–3).
 - **Depends on WP01**: consume `outputText` / `diagnosticText` from `internal/analyzer/channels.go`. Do not re-implement extraction.
-- Existing code: `internal/analyzer/fingerprints.go` currently has `failureRules` (text-pattern loop ~`:405`), `classifyFailures` (~`:345`), `genericFailureSignal` (~`:427`), `jsonLooksLikeSourceRead` (~`:395`), and the `reviewer_failed`/`stale_agent` regexes (~`:163/174`). The structural `obj != nil` rules (`runtime_blocked`, `guard_failure` field, `review_rejected`, etc.) are **out of scope** — do not change them (§4 "Genuinely structural").
+- Existing code: `internal/analyzer/fingerprints.go` currently has `failureRules` (text-pattern loop ~`:405`), `classifyFailures` (~`:345`), `genericFailureSignal` (~`:427`), the former source-read guard, and the `reviewer_failed`/`stale_agent` regexes (~`:163/174`). The structural `obj != nil` rules (`runtime_blocked`, `guard_failure` field, `review_rejected`, etc.) are **out of scope** — do not change them (§4 "Genuinely structural").
 - Constraints: no new deps (NFR-001); determinism (FR-006); schema unchanged (NFR-003).
 
 ## Branch Strategy
@@ -111,7 +111,7 @@ and `classifyFailures` scans each pattern only against the text for its scope.
 
 ### Subtask T009 – Rework `classifyFailures` for per-scope matching
 - **Purpose**: Run each pattern against its scope's cached text.
-- **Steps**: Change `classifyFailures` to accept the cached `outputText` and `diagnosticText` (computed in WP03). For each scoped pattern: match `output` patterns against `outputText`, `diagnostic` patterns against `diagnosticText`. Route `genericFailureSignal` through `outputText`. Drop the old whole-`text` scan and fold `jsonLooksLikeSourceRead`'s role into the WP01 exclusion (the file-read content no longer reaches `outputText`). Preserve the structural `obj != nil` block unchanged.
+- **Steps**: Change `classifyFailures` to accept the cached `outputText` and `diagnosticText` (computed in WP03). For each scoped pattern: match `output` patterns against `outputText`, `diagnostic` patterns against `diagnosticText`. Route `genericFailureSignal` through `outputText`. Drop the old whole-`text` scan and fold the former source-read guard's role into the WP01 exclusion (the file-read content no longer reaches `outputText`). Preserve the structural `obj != nil` block unchanged.
 - **Files**: `internal/analyzer/fingerprints.go`.
 - **Notes**: Keep the function signature explicit so WP03's call site is a clean adapter. Coordinate the exact signature with WP03 (it passes the two strings).
 

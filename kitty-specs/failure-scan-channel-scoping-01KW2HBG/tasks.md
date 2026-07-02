@@ -13,7 +13,7 @@ All work is localized to `internal/analyzer/`. WPs are split by **file ownership
 |----|-------------|----|----------|
 | T001 | Define channel model + extraction entry points in `channels.go` | WP01 | |
 | T002 | Implement per-harness extraction matrix (§3c) → output/narrative/excluded | WP01 | [P] |
-| T003 | Apply §3a universal exclusion (code-edit/file-read), generalizing `jsonLooksLikeSourceRead` | WP01 | |
+| T003 | Apply §3a universal exclusion (code-edit/file-read), generalizing the former source-read guard | WP01 | |
 | T004 | Recursive JSON re-decode of bare-string `toolUseResult`; log unmapped shapes (excluded by default) | WP01 | |
 | T005 | Golden tests per harness shape in `channels_test.go` (§7.3) | WP01 | |
 | T006 | Structural-vs-text ordering fixture: source-read obj also carrying `error`/`status` (§7.4) | WP01 | |
@@ -25,7 +25,7 @@ All work is localized to `internal/analyzer/`. WPs are split by **file ownership
 | T012 | Class-B regression guard at the rule level — `branch_worktree_confusion` narrative still classifies (§7.2) | WP02 | |
 | T013 | `TimelineEvent`: add cached `outputText`/`diagnosticText` fields (`types.go`) | WP03 | |
 | T014 | Build & cache the two channel strings once per event in event construction via `channels.go` (§5) | WP03 | |
-| T015 | `obj == nil` plain-text model: artifact/spec kinds → diagnostic-only; transcript text → output-eligible; generic `.log` unsupported (§3d) | WP03 | |
+| T015 | `obj == nil` plain-text model: artifact/spec kinds → diagnostic-only; transcript text and `.log` command logs → output-eligible; generic `.txt`/`.md`/`.yaml` unsupported (§3d) | WP03 | |
 | T016 | Explicit classification ordering + `skipArtifactMessage` single suppression gate before aggregation (§5) | WP03 | |
 | T017 | Acceptance four-way repro (Contract B) + `obj==nil` tests (§7.5) in `analyzer_test.go` | WP03 | |
 | T018 | Adapt existing `analyzer_test.go` call sites to the new `classifyFailures` signature; preserve the narrative-only `branch_worktree_confusion` test | WP03 | |

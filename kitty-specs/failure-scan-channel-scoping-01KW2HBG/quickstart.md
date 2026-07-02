@@ -28,7 +28,7 @@ regression), validated against real Spec Kitty logs, not only fixtures.
 3. Required outcomes to record in the PR:
    - `generic_error` / `timeout` / `test_failure` narrative FPs **down** (e.g. the
      agent-workspace mission's `generic_error` −22 baseline).
-   - `branch_worktree_confusion` **unchanged** (e.g. finalize-inbox stays 10×) — SC-002.
+   - `branch_worktree_confusion` preserves genuine narrative detections (finalize-inbox 10→2: 2 genuine detections retained, 8 baseline FPs dropped) — SC-002.
    - No event that was a *true* failure before becomes unreported after — SC-003.
    - `analyze` wall-clock on the largest cached mission within +10% — NFR-002.
 

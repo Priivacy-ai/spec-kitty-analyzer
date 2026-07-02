@@ -498,7 +498,7 @@ func classifyFailuresWithChannels(outputText, diagnosticText string, obj map[str
 		}
 	}
 
-	// The old jsonLooksLikeSourceRead short-circuit is gone: the WP01 §3a exclusion
+	// The old source-read short-circuit is gone: the WP01 §3a exclusion
 	// already keeps file-read and code-edit content out of outputText/diagnosticText,
 	// so the scoped scan below can never see it.
 
@@ -526,6 +526,23 @@ func classifyFailuresWithChannels(outputText, diagnosticText string, obj map[str
 		add(failureRule{id: "generic_error", title: "Generic error signal", severity: "medium", recovery: "Inspect surrounding timeline context for the failed command and retry only after root cause is addressed."}, "generic execution failure signal")
 	}
 	return out
+}
+
+func fingerprintForRuleID(id, reason string) (FailureFingerprint, bool) {
+	for _, rule := range failureRules {
+		if rule.id != id {
+			continue
+		}
+		return FailureFingerprint{
+			ID:            rule.id,
+			Title:         rule.title,
+			Severity:      rule.severity,
+			Reason:        reason,
+			Recovery:      rule.recovery,
+			Deterministic: true,
+		}, true
+	}
+	return FailureFingerprint{}, false
 }
 
 // channelStringFor resolves a pattern scope to the channel string it must scan.

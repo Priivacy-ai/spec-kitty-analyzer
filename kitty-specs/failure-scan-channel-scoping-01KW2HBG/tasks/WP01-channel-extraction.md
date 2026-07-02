@@ -85,7 +85,7 @@ behavior change yet**; it provides the two strings WP02/WP03 will consume.
 - Mission docs: `kitty-specs/failure-scan-channel-scoping-01KW2HBG/{plan.md (IC-01),data-model.md,contracts/channel-classification.md,research.md (Decision 5)}`.
 - Existing code to study/reuse (do NOT edit — they belong to other WPs):
   - `internal/analyzer/json_helpers.go` — `flattenJSON` (you may call it; do not modify).
-  - `internal/analyzer/fingerprints.go` — `jsonLooksLikeSourceRead`, `genericFailureSignal`/`genericFailureToolText` show the existing narrow `toolUseResult` handling to generalize from (study only; WP02 owns this file).
+  - `internal/analyzer/fingerprints.go` — the former source-read guard and `genericFailureSignal`/`genericFailureToolText` show the existing narrow `toolUseResult` handling to generalize from (study only; WP02 owns this file).
 - Constraints: Go stdlib only (`encoding/json`, `strings`, `regexp` if needed) — **no new deps** (NFR-001). Deterministic output for identical input (FR-006). One extraction pass; no per-rule re-walks (NFR-002).
 
 ## Branch Strategy
@@ -117,7 +117,7 @@ behavior change yet**; it provides the two strings WP02/WP03 will consume.
 
 ### Subtask T003 – Universal §3a exclusion (code-edit / file-read)
 - **Purpose**: Kill issue-#4 repro line 3 (Edit writing `raise AssertionError`).
-- **Steps**: Exclude `toolUseResult.{newString,oldString}`, `structuredPatch`, and `toolUseResult.file.content` from **both** builders. This generalizes the intent of today's `jsonLooksLikeSourceRead` (which only short-circuits the Read shape).
+- **Steps**: Exclude `toolUseResult.{newString,oldString}`, `structuredPatch`, and `toolUseResult.file.content` from **both** builders. This generalizes the intent of the former source-read guard (which only short-circuited the Read shape).
 - **Files**: `internal/analyzer/channels.go`.
 - **Notes**: Exclusion is absolute — excluded content is never part of output or narrative.
 

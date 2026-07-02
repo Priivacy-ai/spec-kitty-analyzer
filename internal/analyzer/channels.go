@@ -36,7 +36,8 @@ type channelText struct {
 // one event object (the "output" channel). Returns "" for a nil object.
 func outputText(obj map[string]any) string {
 	ct := extractChannels(obj)
-	return strings.Join(ct.output, " ")
+	out, _ := channelStrings(ct)
+	return out
 }
 
 // diagnosticText returns the output channel PLUS narrative (the "diagnostic"
@@ -45,10 +46,17 @@ func outputText(obj map[string]any) string {
 // diagnosticText — guaranteeing diagnosticText ⊇ outputText.
 func diagnosticText(obj map[string]any) string {
 	ct := extractChannels(obj)
+	_, diag := channelStrings(ct)
+	return diag
+}
+
+func channelStrings(ct channelText) (outCh, diagCh string) {
+	outCh = strings.Join(ct.output, " ")
 	frags := make([]string, 0, len(ct.output)+len(ct.narrative))
 	frags = append(frags, ct.output...)
 	frags = append(frags, ct.narrative...)
-	return strings.Join(frags, " ")
+	diagCh = strings.Join(frags, " ")
+	return outCh, diagCh
 }
 
 // extractChannels performs the single typed extraction pass over an event
@@ -187,22 +195,12 @@ func extractToolUseResult(v any, ct *channelText, reDecode bool) {
 }
 
 // extractToolUseResultMap applies the §3a exclusions then extracts the output
-// channels of a structured tool result. §3a is absolute: a file read
-// (file.content) or a code edit (newString/oldString/structuredPatch) yields
-// nothing in either channel. Otherwise stdout/stderr/output strings and any
-// nested error/exception/traceback are output. A tool-result map that matches
-// none of these is an unmapped shape: logged for matrix growth, excluded.
+// channels of a structured tool result. §3a excludes file-read/code-edit content
+// itself; sibling stdout/stderr/output and structured errors are still real tool
+// output. A tool-result map that matches none of these and is not a known
+// read/edit-only shape is an unmapped shape: logged for matrix growth, excluded.
 func extractToolUseResultMap(result map[string]any, ct *channelText) {
-	// §3a file-read exclusion (generalizes jsonLooksLikeSourceRead).
-	if file, ok := result["file"].(map[string]any); ok {
-		if _, hasContent := file["content"].(string); hasContent {
-			return
-		}
-	}
-	// §3a code-edit exclusion.
-	if hasAnyKey(result, "newString", "oldString", "structuredPatch") {
-		return
-	}
+	hasExcludedContent := isSourceReadResult(result) || hasAnyKey(result, "newString", "oldString", "structuredPatch")
 
 	matched := false
 	for _, key := range []string{"stdout", "stderr", "output"} {
@@ -217,9 +215,18 @@ func extractToolUseResultMap(result map[string]any, ct *channelText) {
 			collectStringLeaves(v, &ct.output)
 		}
 	}
-	if !matched {
+	if !matched && !hasExcludedContent {
 		logUnmappedShape("toolUseResult map keys=" + strings.Join(jsonKeys(result), ","))
 	}
+}
+
+func isSourceReadResult(result map[string]any) bool {
+	file, ok := result["file"].(map[string]any)
+	if !ok {
+		return false
+	}
+	_, hasContent := file["content"].(string)
+	return hasContent
 }
 
 // extractCodexPayload handles a codex `payload` object via a typed path keyed on

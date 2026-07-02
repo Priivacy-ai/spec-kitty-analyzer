@@ -83,6 +83,30 @@ func TestMissionHandleNormalizationRejectsNoise(t *testing.T) {
 	}
 }
 
+func TestClassifyPathKindUsesKittySegments(t *testing.T) {
+	cases := []struct {
+		path string
+		want string
+	}{
+		{"kitty-specs/sample/tasks/WP01.md", "work_package"},
+		{"repo/kitty-specs/sample/tasks/WP01.md", "work_package"},
+		{"/tmp/repo/kitty-specs/sample/status.events.jsonl", "mission_status_events"},
+		{"kitty-ops/01KTEST.jsonl", "op_jsonl"},
+		{"notkitty-specs/sample/tasks/WP01.md", "text"},
+	}
+	for _, c := range cases {
+		if got := classifyPathKind(c.path); got != c.want {
+			t.Fatalf("classifyPathKind(%q)=%q want %q", c.path, got, c.want)
+		}
+	}
+
+	path := "kitty-specs/sample/tasks/WP01.md"
+	events, _ := parseFile(path, classifyPathKind(path), []byte("---\nreview_status: has_feedback\n---\n"), 0, newBuildState())
+	if len(events) == 0 || !failureListHas(events[0].Failures, "review_rejected") {
+		t.Fatalf("root-relative work package frontmatter must surface review_rejected; events=%#v", events)
+	}
+}
+
 func TestSourceReadDoesNotBecomeFailure(t *testing.T) {
 	sourceRead := map[string]any{
 		"toolUseResult": map[string]any{
@@ -355,20 +379,20 @@ func TestIssue4FourWayReproThroughEvent(t *testing.T) {
 	}
 }
 
-// TestObjNilChannelRouting covers the §3d plain-text model (Contract D) plus the
-// generic-.log deferral, all through the event path (T015/T017b).
+// TestObjNilChannelRouting covers the §3d plain-text model (Contract D) through
+// the event path (T015/T017b).
 func TestObjNilChannelRouting(t *testing.T) {
-	// Contract D row 1: an artifact/spec line that merely discusses an error must not
-	// surface as a failure. The text is output-eligible at the event level, but the
-	// single §5 suppression gate (skipArtifactMessage) drops it before aggregation.
+	// Contract D row 1: an artifact/spec line that merely discusses an error is
+	// diagnostic-only, so output-scoped failure patterns never see it.
 	artifactPath := "repo/kitty-specs/sample/research.md"
 	proseLine := "The pytest run reported AssertionError: boom and exited with exit code 1."
-	preGate := eventFromText(artifactPath, 1, 1, proseLine, nil)
-	if len(preGate.Failures) == 0 {
-		t.Fatalf("artifact prose should classify at the event level (output-eligible) pre-gate; got none")
+	artifactOut, artifactDiag := channelStringsForEvent(artifactPath, proseLine, nil)
+	if artifactOut != "" || !strings.Contains(artifactDiag, "AssertionError") {
+		t.Fatalf("artifact prose must be diagnostic-only; out=%q diag=%q", artifactOut, artifactDiag)
 	}
-	if !skipArtifactMessage("mission_artifact", &preGate) {
-		t.Fatalf("single §5 gate must suppress the artifact prose failure: %#v", preGate.Failures)
+	preGate := eventFromText(artifactPath, 1, 1, proseLine, nil)
+	if len(preGate.Failures) != 0 {
+		t.Fatalf("artifact prose must not classify output-scoped failures pre-gate; got %#v", preGate.Failures)
 	}
 	events, _ := parseFile(artifactPath, "mission_artifact", []byte(proseLine+"\n"), 0, newBuildState())
 	for _, e := range events {
@@ -378,10 +402,9 @@ func TestObjNilChannelRouting(t *testing.T) {
 	}
 
 	// The one whitelisted artifact signal — review_rejected on WP frontmatter — must
-	// still surface (artifactFailureWhitelist / retainWhitelistedArtifactFailures).
-	// This is the SC-003 guard the design's
-	// diagnostic-only routing would have regressed.
-	wpEvents, _ := parseFile("repo/kitty-specs/sample/tasks/WP01.md", "work_package", []byte("review_status: has_feedback\n"), 0, newBuildState())
+	// still surface via the frontmatter detector, not artifact-wide output routing.
+	wpData := []byte("---\nreview_status: has_feedback\n---\n")
+	wpEvents, _ := parseFile("repo/kitty-specs/sample/tasks/WP01.md", "work_package", wpData, 0, newBuildState())
 	foundReview := false
 	for _, e := range wpEvents {
 		if failureListHas(e.Failures, "review_rejected") {
@@ -390,6 +413,26 @@ func TestObjNilChannelRouting(t *testing.T) {
 	}
 	if !foundReview {
 		t.Fatalf("whitelisted review_rejected must survive on WP frontmatter; events=%#v", wpEvents)
+	}
+
+	researchEvents, _ := parseFile("repo/kitty-specs/sample/research.md", "mission_artifact", []byte("review_status: has_feedback\n"), 0, newBuildState())
+	for _, e := range researchEvents {
+		if failureListHas(e.Failures, "review_rejected") {
+			t.Fatalf("research prose mentioning review_status must not surface review_rejected; events=%#v", researchEvents)
+		}
+	}
+	researchJSON := []byte(`{"toolUseResult":{"stdout":"review_status: has_feedback"}}` + "\n")
+	researchJSONEvents, _ := parseFile("repo/kitty-specs/sample/research.md", "mission_artifact", researchJSON, 0, newBuildState())
+	for _, e := range researchJSONEvents {
+		if failureListHas(e.Failures, "review_rejected") {
+			t.Fatalf("research JSON output mentioning review_status must not surface review_rejected; events=%#v", researchJSONEvents)
+		}
+	}
+	wpBodyJSONEvents, _ := parseFile("repo/kitty-specs/sample/tasks/WP01.md", "work_package", researchJSON, 0, newBuildState())
+	for _, e := range wpBodyJSONEvents {
+		if failureListHas(e.Failures, "review_rejected") {
+			t.Fatalf("WP non-frontmatter JSON output mentioning review_status must not surface review_rejected; events=%#v", wpBodyJSONEvents)
+		}
 	}
 
 	// Contract D row 2: a transcript-derived stray non-JSON line carrying real output
@@ -403,15 +446,25 @@ func TestObjNilChannelRouting(t *testing.T) {
 		t.Fatalf("transcript stray failure=%#v want test_failure", strayEv.Failures)
 	}
 
-	// §3d generic standalone .log/.txt: explicitly unsupported — empty channels, so the
-	// same failure text does not classify (documented deferral, not silent output).
-	gout, gdiag := channelStringsForEvent("build.log", "AssertionError: boom", nil)
-	if gout != "" || gdiag != "" {
-		t.Fatalf("generic .log must be unsupported (empty channels); out=%q diag=%q", gout, gdiag)
+	// Direct .log files are command-output logs and remain output-eligible.
+	logOut, logDiag := channelStringsForEvent("build.log", "AssertionError: boom", nil)
+	if logOut == "" || logDiag == "" {
+		t.Fatalf(".log command output must be output-eligible; out=%q diag=%q", logOut, logDiag)
 	}
 	logEv := eventFromText("build.log", 1, 1, "AssertionError: boom", nil)
-	if len(logEv.Failures) != 0 {
-		t.Fatalf("generic .log must not classify (unsupported); got %#v", logEv.Failures)
+	if !failureListHas(logEv.Failures, "test_failure") {
+		t.Fatalf(".log command output must classify output failures; got %#v", logEv.Failures)
+	}
+
+	// Generic standalone .txt remains unsupported: no source kind proves it is command
+	// output rather than prose.
+	txtOut, txtDiag := channelStringsForEvent("notes.txt", "AssertionError: boom", nil)
+	if txtOut != "" || txtDiag != "" {
+		t.Fatalf("generic .txt must remain unsupported; out=%q diag=%q", txtOut, txtDiag)
+	}
+	txtEv := eventFromText("notes.txt", 1, 1, "AssertionError: boom", nil)
+	if len(txtEv.Failures) != 0 {
+		t.Fatalf("generic .txt must not classify; got %#v", txtEv.Failures)
 	}
 }
 
@@ -459,59 +512,25 @@ func TestArtifactSuppressionAllFourKinds(t *testing.T) {
 	}
 }
 
-// TestArtifactPerFailureWhitelist covers Codex cycle-2 Fix 2: suppression is
-// per-failure, not all-or-nothing. An artifact event matching BOTH the whitelisted
-// review_rejected AND a non-whitelisted rule (test_failure) must keep EXACTLY
-// review_rejected — the other failure is dropped, not ridden through.
-func TestArtifactPerFailureWhitelist(t *testing.T) {
-	line := `review_status: has_feedback — AssertionError: boom`
+// TestArtifactReviewRejectedWhitelist proves WP frontmatter review_rejected survives
+// while neighboring artifact diagnostic failures are still suppressed.
+func TestArtifactReviewRejectedWhitelist(t *testing.T) {
+	data := []byte("---\nreview_status: has_feedback\nnote: mission targets main branch\n---\n")
 	wpPath := "repo/kitty-specs/sample/tasks/WP02.md"
 
-	// Pre-gate the event carries BOTH failures, proving the filter (not a missing
-	// match) is what removes test_failure.
-	preGate := eventFromText(wpPath, 1, 1, line, nil)
-	if !failureListHas(preGate.Failures, "review_rejected") || !failureListHas(preGate.Failures, "test_failure") {
-		t.Fatalf("pre-gate event must carry both review_rejected and test_failure; got %#v", preGate.Failures)
-	}
-
-	events, _ := parseFile(wpPath, "work_package", []byte(line+"\n"), 0, newBuildState())
+	events, _ := parseFile(wpPath, "work_package", data, 0, newBuildState())
 	var got []FailureFingerprint
 	for _, e := range events {
 		got = append(got, e.Failures...)
 	}
 	if len(got) != 1 || got[0].ID != "review_rejected" {
-		t.Fatalf("exactly review_rejected must survive per-failure whitelist; got %#v", got)
+		t.Fatalf("exactly review_rejected must survive artifact suppression; got %#v", got)
 	}
 }
 
-// TestArtifactTitleRecomputedAfterFilter covers cycle-3 Fix 1: event.Title is
-// derived from the PRE-filter failures[0] (titleForEvent / titleForKind) BEFORE the
-// per-failure artifact whitelist runs in skipArtifactMessage. When the dropped
-// failure is EARLIER-ordered than the surviving review_rejected, the stale title
-// names the dropped failure while event.Failures lists only review_rejected. After
-// parseFile the surviving event must carry EXACTLY review_rejected AND a title that
-// corresponds to review_rejected — proving the gate recomputed the title.
-func TestArtifactTitleRecomputedAfterFilter(t *testing.T) {
-	// guard_failure is the FIRST rule in failureRules (fingerprints.go), defined well
-	// before review_rejected, so the pre-filter failures[0] is guard_failure and the
-	// pre-gate title is its rule title ("Runtime guard failure").
-	line := `review_status: has_feedback — guard failure blocked the ref advance`
+func TestArtifactReviewRejectedTitle(t *testing.T) {
 	wpPath := "repo/kitty-specs/sample/tasks/WP03.md"
-
-	// Pre-gate: the event carries BOTH failures, the earlier-ordered guard_failure is
-	// failures[0], and the title comes from that (soon-to-be-dropped) failure.
-	preGate := eventFromText(wpPath, 1, 1, line, nil)
-	if !failureListHas(preGate.Failures, "review_rejected") || !failureListHas(preGate.Failures, "guard_failure") {
-		t.Fatalf("pre-gate event must carry both review_rejected and guard_failure; got %#v", preGate.Failures)
-	}
-	if preGate.Failures[0].ID != "guard_failure" {
-		t.Fatalf("pre-filter failures[0] must be the earlier-ordered guard_failure (so the title is stale); got %#v", preGate.Failures)
-	}
-	if preGate.Title != "Runtime guard failure" {
-		t.Fatalf("pre-gate title must come from the dropped guard_failure; got %q", preGate.Title)
-	}
-
-	events, _ := parseFile(wpPath, "work_package", []byte(line+"\n"), 0, newBuildState())
+	events, _ := parseFile(wpPath, "work_package", []byte("---\nreview_status: has_feedback\n---\n"), 0, newBuildState())
 	var surviving []TimelineEvent
 	for _, e := range events {
 		if len(e.Failures) > 0 {
@@ -526,7 +545,7 @@ func TestArtifactTitleRecomputedAfterFilter(t *testing.T) {
 		t.Fatalf("exactly review_rejected must survive; got %#v", e.Failures)
 	}
 	if e.Title != "Review rejected work package" {
-		t.Fatalf("title must be recomputed to match surviving review_rejected, not the dropped guard_failure; got %q", e.Title)
+		t.Fatalf("title must match review_rejected; got %q", e.Title)
 	}
 }
 

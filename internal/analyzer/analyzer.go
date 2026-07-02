@@ -198,26 +198,40 @@ func supportedFile(path string) bool {
 func classifyPathKind(path string) string {
 	slash := filepath.ToSlash(path)
 	base := filepath.Base(path)
+	ext := strings.ToLower(filepath.Ext(path))
+	inKittyOps := hasPathSegment(slash, "kitty-ops")
+	inKittySpecs := hasPathSegment(slash, "kitty-specs")
 	switch {
-	case strings.Contains(slash, "/kitty-ops/"):
+	case inKittyOps:
 		return "op_jsonl"
-	case strings.Contains(slash, "/kitty-specs/") && base == "status.events.jsonl":
+	case inKittySpecs && base == "status.events.jsonl":
 		return "mission_status_events"
-	case strings.Contains(slash, "/kitty-specs/") && base == "meta.json":
+	case inKittySpecs && base == "meta.json":
 		return "mission_meta"
-	case strings.Contains(slash, "/kitty-specs/") && base == "status.json":
+	case inKittySpecs && base == "status.json":
 		return "mission_status_snapshot"
-	case strings.Contains(slash, "/kitty-specs/") && strings.HasPrefix(base, "WP") && strings.HasSuffix(base, ".md"):
+	case inKittySpecs && strings.HasPrefix(base, "WP") && strings.HasSuffix(base, ".md"):
 		return "work_package"
-	case strings.Contains(slash, "/kitty-specs/"):
+	case inKittySpecs:
 		return "mission_artifact"
 	case strings.HasSuffix(base, ".jsonl"):
 		return "jsonl_transcript"
 	case strings.HasSuffix(base, ".json"):
 		return "json"
+	case ext == ".log":
+		return "command_log"
 	default:
 		return "text"
 	}
+}
+
+func hasPathSegment(slashPath, segment string) bool {
+	for _, part := range strings.Split(slashPath, "/") {
+		if part == segment {
+			return true
+		}
+	}
+	return false
 }
 
 func parseFile(path, kind string, data []byte, startTurn int, state *buildState) ([]TimelineEvent, int) {
@@ -241,9 +255,21 @@ func parseFile(path, kind string, data []byte, startTurn int, state *buildState)
 	var events []TimelineEvent
 	lineNo := 0
 	turn := startTurn
+	inWorkPackageFrontmatter := false
 	for scanner.Scan() {
 		lineNo++
 		raw := bytes.TrimSpace(scanner.Bytes())
+		frontmatterLine := false
+		if kind == "work_package" {
+			switch {
+			case lineNo == 1 && bytes.Equal(raw, []byte("---")):
+				inWorkPackageFrontmatter = true
+			case inWorkPackageFrontmatter && bytes.Equal(raw, []byte("---")):
+				inWorkPackageFrontmatter = false
+			case inWorkPackageFrontmatter:
+				frontmatterLine = true
+			}
+		}
 		if len(raw) == 0 {
 			continue
 		}
@@ -260,6 +286,9 @@ func parseFile(path, kind string, data []byte, startTurn int, state *buildState)
 		// object-line branch bypassed the gate, so an artifact .md carrying a JSON
 		// line could leak a suppressed failure; routing both branches through the
 		// same predicate closes that and matches the §5 single-gate intent.)
+		if frontmatterLine {
+			addWorkPackageFrontmatterFailures(&event, string(raw))
+		}
 		if event.Kind != "" && !skipArtifactMessage(kind, &event) {
 			events = append(events, event)
 		}
@@ -305,8 +334,8 @@ func eventFromJSONObject(path string, line, turn int, obj map[string]any) Timeli
 // contributes nothing to findings. This is why the event is taken by pointer — the
 // filtered slice must be observed by the caller before aggregation.
 //
-// The whitelist intentionally surfaces review_rejected (an output-scoped TEXT rule
-// on WP `review_status:` frontmatter); see channelStringsForEvent's artifact branch.
+// The whitelist intentionally surfaces review_rejected only after the work-package
+// frontmatter-specific detector adds it; arbitrary artifact prose cannot create it.
 func skipArtifactMessage(kind string, event *TimelineEvent) bool {
 	if !isArtifactKind(kind) {
 		return false
@@ -316,7 +345,7 @@ func skipArtifactMessage(kind string, event *TimelineEvent) bool {
 	}
 	if len(event.Failures) > 0 {
 		before := len(event.Failures)
-		event.Failures = retainWhitelistedArtifactFailures(event.Failures)
+		event.Failures = retainWhitelistedArtifactFailures(kind, event.Failures)
 		if len(event.Failures) == 0 {
 			return true
 		}
@@ -335,26 +364,61 @@ func skipArtifactMessage(kind string, event *TimelineEvent) bool {
 	return false
 }
 
-// artifactFailureWhitelist is the single source of truth for which failure IDs the
-// analyzer intentionally surfaces from artifact-kind sources. Today only
-// review_rejected (WP `review_status:` frontmatter) is whitelisted; every other
-// artifact-derived failure is suppressed before findings aggregation.
-var artifactFailureWhitelist = map[string]bool{
-	"review_rejected": true,
-}
+// reviewRejectedFrontmatterReason tags the only artifact-derived failure the
+// analyzer intentionally surfaces: WP `review_status: has_feedback` frontmatter
+// detected structurally in parseFile. Text-pattern review_rejected matches in
+// artifact prose/output are suppressed like every other artifact-derived failure.
+const reviewRejectedFrontmatterReason = "work package frontmatter review_status is has_feedback"
 
-// retainWhitelistedArtifactFailures returns the failures whose IDs are in
-// artifactFailureWhitelist, preserving source order. Non-whitelisted artifact
-// failures are dropped per-failure (so an event matching both review_rejected and
-// another rule keeps only review_rejected).
-func retainWhitelistedArtifactFailures(failures []FailureFingerprint) []FailureFingerprint {
+// retainWhitelistedArtifactFailures returns only structurally allowed artifact
+// failures, preserving source order.
+func retainWhitelistedArtifactFailures(kind string, failures []FailureFingerprint) []FailureFingerprint {
 	kept := failures[:0]
 	for _, f := range failures {
-		if artifactFailureWhitelist[f.ID] {
+		if artifactFailureAllowed(kind, f) {
 			kept = append(kept, f)
 		}
 	}
 	return kept
+}
+
+func artifactFailureAllowed(kind string, failure FailureFingerprint) bool {
+	return kind == "work_package" &&
+		failure.ID == "review_rejected" &&
+		failure.Reason == reviewRejectedFrontmatterReason
+}
+
+func addWorkPackageFrontmatterFailures(event *TimelineEvent, line string) {
+	key, value, ok := frontmatterKeyValue(line)
+	if !ok || !strings.EqualFold(key, "review_status") || !strings.EqualFold(value, "has_feedback") {
+		return
+	}
+	failure, ok := fingerprintForRuleID("review_rejected", reviewRejectedFrontmatterReason)
+	if !ok || failureListContains(event.Failures, failure.ID) {
+		return
+	}
+	event.Failures = append(event.Failures, failure)
+	event.Kind = "failure"
+	event.Title = titleForEvent(*event)
+}
+
+func frontmatterKeyValue(line string) (key, value string, ok bool) {
+	idx := strings.Index(line, ":")
+	if idx <= 0 {
+		return "", "", false
+	}
+	key = strings.TrimSpace(line[:idx])
+	value = strings.Trim(strings.TrimSpace(line[idx+1:]), `"'`)
+	return key, value, key != ""
+}
+
+func failureListContains(failures []FailureFingerprint, id string) bool {
+	for _, failure := range failures {
+		if failure.ID == id {
+			return true
+		}
+	}
+	return false
 }
 
 func eventFromText(path string, line, turn int, text string, obj map[string]any) TimelineEvent {
@@ -435,50 +499,29 @@ func channelStringsForEvent(path, text string, obj map[string]any) (outCh, diagC
 		// two strings are byte-identical to the old two-call results: outputText joins
 		// ct.output; diagnosticText joins ct.output followed by ct.narrative.
 		ct := extractChannels(obj)
-		outCh = strings.Join(ct.output, " ")
-		diagFrags := make([]string, 0, len(ct.output)+len(ct.narrative))
-		diagFrags = append(diagFrags, ct.output...)
-		diagFrags = append(diagFrags, ct.narrative...)
-		diagCh = strings.Join(diagFrags, " ")
-		return outCh, diagCh
+		return channelStrings(ct)
 	}
 
 	// §3d plain-text model: a raw, non-JSON line has no harness structure to route,
 	// so resolve it by SOURCE KIND (classifyPathKind), not by content.
 	switch kind := classifyPathKind(path); {
 	case kind == "text":
-		// Generic standalone .log/.txt command-output files (classifyPathKind ==
-		// "text": a bare build.log / notes.txt / .md / .yaml outside kitty-specs) are
-		// EXPLICITLY UNSUPPORTED for now (§3d). There is no source kind that proves
-		// the bytes are command output, and silently treating them as output would
-		// reopen the false-positive class this mission closes. Until a dedicated
-		// `command_log` source kind is introduced (a later change) they contribute no
-		// channel text and are not classified — documented here, not silently
-		// mishandled. Corpus-validated: the sampled missions produce zero failures
-		// from "text"-kind sources, so this deferral drops no true positive (SC-003).
+		// Generic standalone .txt/.md/.yaml files outside kitty-specs are explicitly
+		// unsupported for now. There is no source kind that proves the bytes are
+		// command output, and silently treating them as output would reopen the
+		// false-positive class this mission closes. They contribute no channel text
+		// and are not classified — documented here, not silently mishandled.
 		return "", ""
+
+	case kind == "command_log":
+		return text, text
 
 	case isArtifactKind(kind):
 		// Artifact/spec prose (spec/plan/research/WP markdown, mission meta/status
-		// snapshots). §3d's goal is that artifact prose must NOT surface as a failure
-		// finding. We achieve that goal at the SINGLE §5 suppression gate
-		// (skipArtifactMessage), which drops every non-allowed artifact failure before
-		// findings aggregation, rather than by zeroing the output channel here.
-		//
-		// Rationale for not zeroing output ("diagnostic-only") at this layer: the one
-		// artifact signal the system intentionally keeps — review_rejected, via the
-		// artifactFailureWhitelist (retainWhitelistedArtifactFailures) — is an
-		// OUTPUT-scoped TEXT rule
-		// (fingerprints.go) that fires on WP `review_status:` frontmatter. Design §4
-		// assumed review_rejected was structural; it is not. Zeroing the output
-		// channel for artifact text would silently stop review_rejected matching and
-		// drop a true positive (SC-002/SC-003 regression; it also breaks the fixture).
-		// Keeping artifact text output-eligible and letting the single gate suppress
-		// the rest yields §3d's observable result (no artifact prose in findings)
-		// while preserving review_rejected. (A cleaner future refactor: scope
-		// review_rejected as diagnostic/structural in fingerprints.go, after which
-		// channel-level diagnostic-only routing becomes safe.)
-		return text, text
+		// snapshots) is diagnostic-only. Output-scoped text rules cannot fire on it;
+		// distinctive diagnostic rules may classify pre-gate, then the single artifact
+		// suppression gate drops non-whitelisted artifact failures before aggregation.
+		return "", text
 
 	default:
 		// Transcript-derived stray non-JSON line (a rare line in a .jsonl event log

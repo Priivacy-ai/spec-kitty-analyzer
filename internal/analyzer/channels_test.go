@@ -319,6 +319,40 @@ func TestChannelStructuralVsTextOrdering(t *testing.T) {
 	}
 }
 
+// TestChannelReadEditExclusionPreservesSiblingOutput catches mixed tool-result
+// objects: file/edit payloads are excluded, but sibling stderr/error fields are
+// still real output and must remain visible to failure classification.
+func TestChannelReadEditExclusionPreservesSiblingOutput(t *testing.T) {
+	obj := map[string]any{
+		"toolUseResult": map[string]any{
+			"file": map[string]any{
+				"filePath": "/repo/x.py",
+				"content":  "SIG_FILECONTENT raise AssertionError('boom')",
+			},
+			"newString": "SIG_EDIT raise AssertionError('edit')",
+			"stderr":    "SIG_STDERR E AssertionError: boom",
+			"error":     map[string]any{"message": "SIG_ERROR command failed"},
+		},
+	}
+
+	out := outputText(obj)
+	diag := diagnosticText(obj)
+
+	for _, sig := range []string{"SIG_STDERR", "SIG_ERROR"} {
+		if !strings.Contains(out, sig) {
+			t.Errorf("%s must remain in outputText for mixed tool result, got %q", sig, out)
+		}
+		if !strings.Contains(diag, sig) {
+			t.Errorf("%s must remain in diagnosticText for mixed tool result, got %q", sig, diag)
+		}
+	}
+	for _, sig := range []string{"SIG_FILECONTENT", "SIG_EDIT"} {
+		if strings.Contains(out, sig) || strings.Contains(diag, sig) {
+			t.Errorf("%s must remain excluded from both channels; out=%q diag=%q", sig, out, diag)
+		}
+	}
+}
+
 // TestChannelDeterminism confirms identical input yields identical channel
 // strings across repeated extraction, including for an object whose nested
 // structured error has multiple string leaves (sorted-key traversal, FR-006).

@@ -45,6 +45,8 @@ For signature `AssertionError`:
 |---|---|
 | artifact/spec line discussing an error (kind ∈ artifact kinds) | not a failure |
 | transcript stray non-JSON line containing real output failure text | output-eligible |
+| standalone `.log` command-output file | output-eligible |
+| generic standalone `.txt`/`.md`/`.yaml` prose file | unsupported / not classified |
 
 ## Contract E — determinism & schema
 

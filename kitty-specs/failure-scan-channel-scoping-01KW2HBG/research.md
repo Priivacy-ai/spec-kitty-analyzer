@@ -43,7 +43,8 @@ resulting decisions. **No `[NEEDS CLARIFICATION]` markers remain.**
 
 - **Decision**: Artifact/spec source kinds (`work_package`, `mission_artifact`,
   `mission_meta`, `mission_status_snapshot`) → `diagnostic`-only; transcript stray text
-  → output-eligible; generic standalone `.log`/`.txt` → explicitly unsupported for now.
+  and standalone `.log` command-output files → output-eligible; generic standalone
+  `.txt`/`.md`/`.yaml` → explicitly unsupported for now.
 - **Rationale**: Closes the live FP path on plain-text artifacts without suppressing
   genuine raw output logs (Codex finding #1).
 

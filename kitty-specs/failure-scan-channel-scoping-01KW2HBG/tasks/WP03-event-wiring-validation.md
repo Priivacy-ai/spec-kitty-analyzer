@@ -74,7 +74,7 @@ charter-required corpus evidence. This WP turns the foundation (WP01) + scoped r
 
 **Done when:**
 - `TimelineEvent` caches `outputText` / `diagnosticText`, built **once** per event via WP01's `channels.go`.
-- The `obj == nil` model (§3d) is implemented: artifact/spec source kinds → `diagnostic`-only; transcript stray text → output-eligible; generic `.log`/`.txt` → explicitly unsupported (documented).
+- The `obj == nil` model (§3d) is implemented: artifact/spec source kinds → `diagnostic`-only; transcript stray text and `.log` command logs → output-eligible; generic `.txt`/`.md`/`.yaml` → explicitly unsupported (documented).
 - Classification ordering is explicit (structural → §3a exclusion → per-pattern text rules → `generic_error` fallback) and `skipArtifactMessage` is applied as a single suppression gate **before aggregation**.
 - The issue-#4 four-way reproduction (Contract B) classifies **only** the `stderr` line; `branch_worktree_confusion` in narrative still classifies (Contract C).
 - Existing `analyzer_test.go` call sites are adapted to the new `classifyFailures` signature; the narrative-only `branch_worktree_confusion` test is preserved.
@@ -86,7 +86,7 @@ charter-required corpus evidence. This WP turns the foundation (WP01) + scoped r
 - **Authoritative design**: `docs/design/issue-4-failure-scan-channel-scoping.md` §3d, §5, §7. The §5 ordering and the §7 validation list are the contract.
 - Mission docs: `plan.md` (IC-03/04/05), `quickstart.md` (corpus procedure), `contracts/channel-classification.md` (Contracts B, D, E), `research.md` (Decisions 4, 6).
 - **Depends on WP01 + WP02**: build the cached strings with `channels.go`; call the reworked `classifyFailures(outputText, diagnosticText, …)` from WP02. Match WP02's documented signature (check its Activity Log).
-- Existing code: `internal/analyzer/analyzer.go` — `eventFromJSONObject` (~`:265` builds `text = flattenJSON(obj)`), `eventFromText` (~`:256/310`, the `obj==nil` path), `skipArtifactMessage` (~`:285`, drops artifact-derived failures after classification, subject to `artifactFailureAllowed` exceptions like `review_rejected`). `internal/analyzer/types.go` — `TimelineEvent` struct + the source-`kind` detection.
+- Existing code: `internal/analyzer/analyzer.go` — `eventFromJSONObject` (~`:265` builds `text = flattenJSON(obj)`), `eventFromText` (~`:256/310`, the `obj==nil` path), `skipArtifactMessage` (~`:285`, drops artifact-derived failures after classification, subject to the WP-frontmatter `review_rejected` exception). `internal/analyzer/types.go` — `TimelineEvent` struct + the source-`kind` detection.
 - Constraints: ≤10% wall-clock overhead on the largest cached mission (NFR-002) — cache the strings, no per-rule re-walk; determinism (FR-006); report schema/`report.version` unchanged (NFR-003); no new deps (NFR-001).
 
 ## Branch Strategy
@@ -111,12 +111,12 @@ charter-required corpus evidence. This WP turns the foundation (WP01) + scoped r
 
 ### Subtask T015 – `obj == nil` plain-text model (§3d)
 - **Purpose**: Stop artifact/spec prose from classifying while preserving genuine raw output logs.
-- **Steps**: In `eventFromText` (nil path): if the event's source kind ∈ the artifact/spec kind set (`work_package`, `mission_artifact`, `mission_meta`, `mission_status_snapshot`; treat as "any artifact/spec kind") → put the line in `diagnosticText` only (empty `outputText`). Transcript-derived stray non-JSON lines → output-eligible. Generic standalone `.log`/`.txt` → unsupported for now (leave a code comment documenting the deferral; do not silently treat as output).
+- **Steps**: In `eventFromText` (nil path): if the event's source kind ∈ the artifact/spec kind set (`work_package`, `mission_artifact`, `mission_meta`, `mission_status_snapshot`; treat as "any artifact/spec kind") → put the line in `diagnosticText` only (empty `outputText`). Transcript-derived stray non-JSON lines and standalone `.log` command logs → output-eligible. Generic standalone `.txt`/`.md`/`.yaml` → unsupported for now (leave a code comment documenting the deferral; do not silently treat as output).
 - **Files**: `internal/analyzer/analyzer.go`.
 
 ### Subtask T016 – Explicit ordering + single suppression gate (§5)
 - **Purpose**: Make precedence deterministic and gate artifact suppression once.
-- **Steps**: Order classification: (1) structural `obj` rules; (2) §3a exclusion already applied by extraction; (3) per-pattern text rules over the cached strings; (4) `generic_error` fallback (output). Apply `skipArtifactMessage` as a single gate that drops an artifact event's failures **before** they reach `findings` aggregation, honoring existing `artifactFailureAllowed` exceptions (e.g. `review_rejected`). Document that the same gate point will later also gate Tier-3 anomalies (separate PR).
+- **Steps**: Order classification: (1) structural `obj` rules and WP frontmatter `review_status: has_feedback`; (2) §3a exclusion already applied by extraction; (3) per-pattern text rules over the cached strings; (4) `generic_error` fallback (output). Apply `skipArtifactMessage` as a single gate that drops an artifact event's failures **before** they reach `findings` aggregation, honoring the WP-frontmatter `review_rejected` exception. Document that the same gate point will later also gate Tier-3 anomalies (separate PR).
 - **Files**: `internal/analyzer/analyzer.go`.
 
 ### Subtask T017 – Acceptance four-way repro + obj==nil tests
@@ -131,7 +131,7 @@ charter-required corpus evidence. This WP turns the foundation (WP01) + scoped r
 
 ### Subtask T019 – Corpus FN/FP sweep evidence (§7.6)
 - **Purpose**: The charter gate for detection changes — both-directions evidence against real logs.
-- **Steps**: Follow `quickstart.md`: build `main` and candidate binaries; run both over a representative sample of the ~233 locally cached missions; diff per-mission failure counts + by-id breakdown. Record: `generic_error`/`timeout`/`test_failure` narrative FPs **down** (e.g. agent-workspace `generic_error` −22); `branch_worktree_confusion` **unchanged** (finalize-inbox stays 10×, SC-002); no prior true failure becomes unreported (SC-003); `analyze` wall-clock within +10% (NFR-002). Also spot-check the `timeout ×7` drop (§7.7) to confirm they were narrative. Capture the output for the PR description.
+- **Steps**: Follow `quickstart.md`: build `main` and candidate binaries; run both over a representative sample of the ~233 locally cached missions; diff per-mission failure counts + by-id breakdown. Record: `generic_error`/`timeout`/`test_failure` narrative FPs **down** (e.g. agent-workspace `generic_error` −22); `branch_worktree_confusion` preserves the genuine narrative detections (finalize-inbox 10→2: 2 genuine detections retained, 8 baseline FPs dropped, SC-002); no prior true failure becomes unreported (SC-003); `analyze` wall-clock within +10% (NFR-002). Also spot-check the `timeout ×7` drop (§7.7) to confirm they were narrative. Capture the output for the PR description.
 - **Files**: evidence recorded in the PR / Activity Log (no source file; uses the built binaries + `quickstart.md` procedure).
 - **Notes**: zsh does not word-split `$var` in for-loops — list mission slugs literally or use bash.
 
@@ -150,7 +150,7 @@ charter-required corpus evidence. This WP turns the foundation (WP01) + scoped r
 ## Review Guidance
 
 - The four-way repro is the headline acceptance: only `stderr` classifies.
-- `branch_worktree_confusion` corpus count is unchanged (the no-regression invariant).
+- `branch_worktree_confusion` genuine narrative detections are preserved (the no-regression invariant); baseline false positives may drop.
 - Confirm the cached strings are not leaked into the serialized report (schema stable).
 - Corpus evidence (both directions) is present in the PR.
 
@@ -160,7 +160,7 @@ charter-required corpus evidence. This WP turns the foundation (WP01) + scoped r
 - 2026-06-26T19:57:31Z – claude:opus:implementer-ivan:implementer – shell_pid=18036 – Assigned agent via action command
 - 2026-06-26T21:07:02Z – claude:opus:implementer-ivan:implementer – shell_pid=18036 – Wiring + obj==nil + ordering; corpus -46% FP, SC-003 holds, branch 10->2 accepted (8 were FPs). Commit 851c1da
 - 2026-06-26T21:07:18Z – claude:opus:reviewer-renata:reviewer – shell_pid=43542 – Started review via action command
-- 2026-06-26T21:10:21Z – user – shell_pid=43542 – Capstone verified: wiring, §3d (review_rejected-preserving deviation sound), ordering, acceptance + corpus
+- 2026-06-26T21:10:21Z – user – shell_pid=43542 – Capstone verified: wiring, §3d (later tightened to WP-frontmatter review_rejected only), ordering, acceptance + corpus
 - 2026-06-26T21:15:22Z – user – shell_pid=43542 – Moved to planned
 - 2026-06-26T21:15:27Z – claude:opus:implementer-ivan:implementer – shell_pid=46430 – Started implementation via action command
 - 2026-06-26T21:20:12Z – claude:opus:implementer-ivan:implementer – shell_pid=46430 – Codex cycle-2: uniform artifact suppression + per-failure whitelist + dedup extraction
