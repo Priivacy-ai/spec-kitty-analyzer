@@ -236,6 +236,60 @@ func TestFingerprintOutputScopedClassifiesFromOutput(t *testing.T) {
 	}
 }
 
+// TestFingerprintTyperUsageErrorCompanion pins the typer_usage_error half of #11 item C:
+// the `exit code 2` proxy now requires a usage-error COMPANION token in-window, so it
+// fires on a real Typer/Click usage error but not as typer_usage_error on file/doc content
+// that merely mentions "exit code 2" (the codex output-channel false-positive this closes).
+// The merge_operation_failed half remains under #13 with the broader source-awareness work.
+func TestFingerprintTyperUsageErrorCompanion(t *testing.T) {
+	// (a) Distinctive Typer output still classifies on its own (patterns 1-3 unchanged).
+	for _, out := range []string{
+		"Usage: spec-kitty [OPTIONS] COMMAND [ARGS]...",
+		"Error: No such option: --json",
+		"Got unexpected extra argument (foo)",
+	} {
+		if got := classifyFailuresWithChannels(out, out, "", nil, nil); !failureListHas(got, "typer_usage_error") {
+			t.Fatalf("distinctive usage output must classify typer_usage_error: %q -> %#v", out, got)
+		}
+	}
+
+	// (b) exit-status 2 WITH a usage companion classifies via the tightened pattern
+	// ALONE — this input matches none of patterns 1-3 (no leading "Usage:", no "No such
+	// option/command", no "Got unexpected extra argument"), so only the companion rule
+	// can fire. Proves the tightening still catches a real usage error.
+	companionOnly := "Error: Missing argument 'WP_ID'.\nProcess failed with exit code 2."
+	if got := classifyFailuresWithChannels(companionOnly, companionOnly, "", nil, nil); !failureListHas(got, "typer_usage_error") {
+		t.Fatalf("usage error (Missing argument + exit code 2 companion) must classify: %#v", got)
+	}
+
+	// (c) FP guard: "exit code 2" as incidental CONTENT with no usage companion must NOT
+	// classify as typer_usage_error — the source/doc/comment shapes surfaced through the
+	// output channel that this tightening removes from this specific rule.
+	for _, content := range []string{
+		"# the CLI surfaces this as exit code 2 on failure",
+		"# Stage 2: Agent prompt sync (exit code 2 on failure)",
+		"Process exited with code 0 Output: the helper returns exit code 2 for transient network errors and retries",
+	} {
+		if got := classifyFailuresWithChannels(content, content, "", nil, nil); failureListHas(got, "typer_usage_error") {
+			t.Fatalf("bare 'exit code 2' content without a usage companion must NOT classify as typer_usage_error: %q -> %#v", content, got)
+		}
+	}
+
+	// (d) KNOWN RESIDUAL (TODO #13): content that QUOTES real help — a usage token AND
+	// "exit code 2" within the window — still classifies. Pattern tuning cannot separate
+	// quoted docs from observed command output; that needs the source-awareness fix in
+	// #13. This case documents the current boundary so a future #13 fix flips it
+	// deliberately rather than silently.
+	// Isolates the companion path: no leading "Usage: spec-kitty" (pattern 1), no "No
+	// such option/command" (2), no "Got unexpected extra argument" (3) — it matches ONLY
+	// via the tightened companion rule (a mid-text "usage:" token within window of "exit
+	// code 2"), which is exactly the residual #13 must resolve.
+	quotedHelp := "Reference: the command usage: 'spec-kitty run [OPTS]'; on invalid args it exits with exit code 2."
+	if got := classifyFailuresWithChannels(quotedHelp, quotedHelp, "", nil, nil); !failureListHas(got, "typer_usage_error") {
+		t.Fatalf("residual guard (TODO #13): quoted-help content currently still classifies via the companion rule; if this changed, update the #13 note: %#v", got)
+	}
+}
+
 // TestFingerprintFileReadContentExcludedThroughWrapper is the real §7.2 / §3a
 // exclusion guard (Codex review cycle 2 replaced the tautological empty-string
 // version). It drives the PUBLIC wrapper end-to-end with a Claude file-read object

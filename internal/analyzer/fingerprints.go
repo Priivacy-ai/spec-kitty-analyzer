@@ -104,11 +104,27 @@ var failureRules = []failureRule{
 		title:    "CLI usage error",
 		severity: "medium",
 		recovery: "Re-run the command with --help and correct flags/arguments before retrying the workflow.",
+		// The first three patterns are distinctive Typer/Click usage-error output and
+		// fire on their own. `exit code 2` alone was a weak proxy (#11 item C): Typer
+		// exits with status 2 but prints "Usage:/Error:" — it never emits the literal
+		// "exit code 2", so that string overwhelmingly appears as incidental *content*
+		// (source, docs, comments like "the CLI surfaces this as exit code 2") surfaced
+		// through the output channel, a large false-positive source. It is retained only
+		// with a usage-error COMPANION token in the same window ([\s\S] spans the usage
+		// line and the exit-status line), so it fires on a real usage error, not on prose
+		// that merely mentions the phrase.
+		//
+		// Residual (TODO #13): content that QUOTES real Typer help — a usage token AND
+		// "exit code 2" within the window (e.g. a doc showing "Usage: … returns exit code
+		// 2 on invalid args") — still matches. Separating quoted help/docs from observed
+		// command output needs source-awareness (codex read-content vs command result),
+		// the channel/source fix tracked in #13, not pattern tuning here.
 		patterns: []scopedPattern{
 			outRx(`(?i)^Usage: spec-kitty`),
 			outRx(`(?i)Error: No such (option|command)`),
 			outRx(`(?i)Got unexpected extra argument`),
-			outRx(`(?i)\bexit code 2\b`),
+			outRx(`(?i)\bexit (code|status) 2\b[\s\S]{0,160}\b(usage:|no such (option|command)|unexpected extra argument|missing (option|argument)|try [^\n]{0,24}--help)`),
+			outRx(`(?i)\b(usage:|no such (option|command)|unexpected extra argument|missing (option|argument)|try [^\n]{0,24}--help)[\s\S]{0,160}\bexit (code|status) 2\b`),
 		},
 	},
 	{
