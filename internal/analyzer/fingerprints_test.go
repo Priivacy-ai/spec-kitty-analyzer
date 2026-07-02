@@ -236,11 +236,11 @@ func TestFingerprintOutputScopedClassifiesFromOutput(t *testing.T) {
 	}
 }
 
-// TestFingerprintTyperUsageErrorCompanion pins #11 item C: the typer_usage_error
-// `exit code 2` proxy now requires a usage-error COMPANION token in-window, so it
-// fires on a real Typer/Click usage error but not on file/doc content that merely
-// mentions "exit code 2" (the codex output-channel false-positive this closes). The
-// three distinctive usage patterns are unchanged and still fire on their own.
+// TestFingerprintTyperUsageErrorCompanion pins the typer_usage_error half of #11 item C:
+// the `exit code 2` proxy now requires a usage-error COMPANION token in-window, so it
+// fires on a real Typer/Click usage error but not as typer_usage_error on file/doc content
+// that merely mentions "exit code 2" (the codex output-channel false-positive this closes).
+// The merge_operation_failed half remains under #13 with the broader source-awareness work.
 func TestFingerprintTyperUsageErrorCompanion(t *testing.T) {
 	// (a) Distinctive Typer output still classifies on its own (patterns 1-3 unchanged).
 	for _, out := range []string{
@@ -248,7 +248,7 @@ func TestFingerprintTyperUsageErrorCompanion(t *testing.T) {
 		"Error: No such option: --json",
 		"Got unexpected extra argument (foo)",
 	} {
-		if got := classifyFailuresWithChannels(out, out, nil, nil); !failureListHas(got, "typer_usage_error") {
+		if got := classifyFailuresWithChannels(out, out, "", nil, nil); !failureListHas(got, "typer_usage_error") {
 			t.Fatalf("distinctive usage output must classify typer_usage_error: %q -> %#v", out, got)
 		}
 	}
@@ -258,20 +258,20 @@ func TestFingerprintTyperUsageErrorCompanion(t *testing.T) {
 	// option/command", no "Got unexpected extra argument"), so only the companion rule
 	// can fire. Proves the tightening still catches a real usage error.
 	companionOnly := "Error: Missing argument 'WP_ID'.\nProcess failed with exit code 2."
-	if got := classifyFailuresWithChannels(companionOnly, companionOnly, nil, nil); !failureListHas(got, "typer_usage_error") {
+	if got := classifyFailuresWithChannels(companionOnly, companionOnly, "", nil, nil); !failureListHas(got, "typer_usage_error") {
 		t.Fatalf("usage error (Missing argument + exit code 2 companion) must classify: %#v", got)
 	}
 
 	// (c) FP guard: "exit code 2" as incidental CONTENT with no usage companion must NOT
-	// classify — the source/doc/comment shapes surfaced through the output channel that
-	// this tightening removes.
+	// classify as typer_usage_error — the source/doc/comment shapes surfaced through the
+	// output channel that this tightening removes from this specific rule.
 	for _, content := range []string{
 		"# the CLI surfaces this as exit code 2 on failure",
 		"# Stage 2: Agent prompt sync (exit code 2 on failure)",
 		"Process exited with code 0 Output: the helper returns exit code 2 for transient network errors and retries",
 	} {
-		if got := classifyFailuresWithChannels(content, content, nil, nil); failureListHas(got, "typer_usage_error") {
-			t.Fatalf("bare 'exit code 2' content without a usage companion must NOT classify: %q -> %#v", content, got)
+		if got := classifyFailuresWithChannels(content, content, "", nil, nil); failureListHas(got, "typer_usage_error") {
+			t.Fatalf("bare 'exit code 2' content without a usage companion must NOT classify as typer_usage_error: %q -> %#v", content, got)
 		}
 	}
 
@@ -285,7 +285,7 @@ func TestFingerprintTyperUsageErrorCompanion(t *testing.T) {
 	// via the tightened companion rule (a mid-text "usage:" token within window of "exit
 	// code 2"), which is exactly the residual #13 must resolve.
 	quotedHelp := "Reference: the command usage: 'spec-kitty run [OPTS]'; on invalid args it exits with exit code 2."
-	if got := classifyFailuresWithChannels(quotedHelp, quotedHelp, nil, nil); !failureListHas(got, "typer_usage_error") {
+	if got := classifyFailuresWithChannels(quotedHelp, quotedHelp, "", nil, nil); !failureListHas(got, "typer_usage_error") {
 		t.Fatalf("residual guard (TODO #13): quoted-help content currently still classifies via the companion rule; if this changed, update the #13 note: %#v", got)
 	}
 }
