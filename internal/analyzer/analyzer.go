@@ -500,8 +500,7 @@ func channelStringsForEvent(path, text string, obj map[string]any) (outCh, diagC
 		// the channels.go "unmapped event shape" stderr log twice for one event. The
 		// two strings are byte-identical to the old two-call results: outputText joins
 		// ct.output; diagnosticText joins ct.output followed by ct.narrative.
-		ct := extractChannels(obj)
-		return channelStrings(ct)
+		return channelTextPair(obj)
 	}
 
 	// §3d plain-text model: a raw, non-JSON line has no harness structure to route,

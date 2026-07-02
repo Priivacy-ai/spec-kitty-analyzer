@@ -35,8 +35,7 @@ type channelText struct {
 // outputText returns the real command/tool output and structured error text for
 // one event object (the "output" channel). Returns "" for a nil object.
 func outputText(obj map[string]any) string {
-	ct := extractChannels(obj)
-	out, _ := channelStrings(ct)
+	out, _ := channelTextPair(obj)
 	return out
 }
 
@@ -45,9 +44,14 @@ func outputText(obj map[string]any) string {
 // the same order as outputText, so outputText is always a prefix of
 // diagnosticText — guaranteeing diagnosticText ⊇ outputText.
 func diagnosticText(obj map[string]any) string {
-	ct := extractChannels(obj)
-	_, diag := channelStrings(ct)
+	_, diag := channelTextPair(obj)
 	return diag
+}
+
+// channelTextPair derives both channel strings from one extraction pass. Use this
+// when both strings are needed so unmapped-shape logging stays one-per-event.
+func channelTextPair(obj map[string]any) (outCh, diagCh string) {
+	return channelStrings(extractChannels(obj))
 }
 
 func channelStrings(ct channelText) (outCh, diagCh string) {

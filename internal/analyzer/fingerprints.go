@@ -472,8 +472,7 @@ func findFailureRule(id string) (failureRule, bool) {
 func classifyFailures(text string, obj map[string]any, invocations []CLIInvocation) []FailureFingerprint {
 	var outText, diagText string
 	if obj != nil {
-		outText = outputText(obj)
-		diagText = diagnosticText(obj)
+		outText, diagText = channelTextPair(obj)
 	} else {
 		outText = text
 		diagText = text
@@ -605,20 +604,18 @@ func classifyFailuresWithChannels(outputText, diagnosticText, sourceKind string,
 }
 
 func fingerprintForRuleID(id, reason string) (FailureFingerprint, bool) {
-	for _, rule := range failureRules {
-		if rule.id != id {
-			continue
-		}
-		return FailureFingerprint{
-			ID:            rule.id,
-			Title:         rule.title,
-			Severity:      rule.severity,
-			Reason:        reason,
-			Recovery:      rule.recovery,
-			Deterministic: true,
-		}, true
+	rule, ok := findFailureRule(id)
+	if !ok {
+		return FailureFingerprint{}, false
 	}
-	return FailureFingerprint{}, false
+	return FailureFingerprint{
+		ID:            rule.id,
+		Title:         rule.title,
+		Severity:      rule.severity,
+		Reason:        reason,
+		Recovery:      rule.recovery,
+		Deterministic: true,
+	}, true
 }
 
 // channelStringFor resolves a pattern scope to the channel string it must scan.

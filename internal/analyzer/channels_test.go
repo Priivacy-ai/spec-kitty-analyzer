@@ -300,8 +300,7 @@ func TestChannelExtractionMatrix(t *testing.T) {
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			out := outputText(tc.obj)
-			diag := diagnosticText(tc.obj)
+			out, diag := channelTextPair(tc.obj)
 
 			// Invariant: diagnosticText ⊇ outputText (output is a prefix).
 			if !strings.HasPrefix(diag, out) {
@@ -353,8 +352,7 @@ func TestChannelStructuralVsTextOrdering(t *testing.T) {
 		"error": "SIG_TOPLEVELERR command exited with status 1",
 	}
 
-	out := outputText(obj)
-	diag := diagnosticText(obj)
+	out, diag := channelTextPair(obj)
 
 	if !strings.Contains(out, "SIG_TOPLEVELERR") {
 		t.Errorf("top-level error must appear in outputText, got %q", out)
@@ -386,8 +384,7 @@ func TestChannelReadEditExclusionPreservesSiblingOutput(t *testing.T) {
 		},
 	}
 
-	out := outputText(obj)
-	diag := diagnosticText(obj)
+	out, diag := channelTextPair(obj)
 
 	for _, sig := range []string{"SIG_STDERR", "SIG_ERROR"} {
 		if !strings.Contains(out, sig) {
@@ -420,14 +417,14 @@ func TestChannelDeterminism(t *testing.T) {
 		},
 	}
 
-	firstOut := outputText(obj)
-	firstDiag := diagnosticText(obj)
+	firstOut, firstDiag := channelTextPair(obj)
 	for i := 0; i < 5; i++ {
-		if got := outputText(obj); got != firstOut {
-			t.Fatalf("outputText not deterministic: %q != %q", got, firstOut)
+		gotOut, gotDiag := channelTextPair(obj)
+		if gotOut != firstOut {
+			t.Fatalf("outputText not deterministic: %q != %q", gotOut, firstOut)
 		}
-		if got := diagnosticText(obj); got != firstDiag {
-			t.Fatalf("diagnosticText not deterministic: %q != %q", got, firstDiag)
+		if gotDiag != firstDiag {
+			t.Fatalf("diagnosticText not deterministic: %q != %q", gotDiag, firstDiag)
 		}
 	}
 }
@@ -512,10 +509,11 @@ func TestCodexKnownTypeMissingFieldLogsAndExcludes(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			logged := captureStderr(t, func() {
-				if out := outputText(tc.obj); out != "" {
+				out, diag := channelTextPair(tc.obj)
+				if out != "" {
 					t.Errorf("outputText = %q, want empty (excluded)", out)
 				}
-				if diag := diagnosticText(tc.obj); diag != "" {
+				if diag != "" {
 					t.Errorf("diagnosticText = %q, want empty (excluded)", diag)
 				}
 			})
@@ -524,6 +522,9 @@ func TestCodexKnownTypeMissingFieldLogsAndExcludes(t *testing.T) {
 			}
 			if !strings.Contains(logged, "codex payload.type=") {
 				t.Errorf("expected codex payload.type detail in log, got %q", logged)
+			}
+			if count := strings.Count(logged, "unmapped event shape"); count != 1 {
+				t.Errorf("expected exactly one schema-drift log from paired extraction, got %d: %q", count, logged)
 			}
 		})
 	}
@@ -560,8 +561,7 @@ func TestCodexMappedTypesNotLogged(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			logged := captureStderr(t, func() {
-				_ = outputText(tc.obj)
-				_ = diagnosticText(tc.obj)
+				_, _ = channelTextPair(tc.obj)
 			})
 			if strings.Contains(logged, "unmapped event shape") {
 				t.Errorf("mapped codex type %q should not log unmapped-shape, got %q", tc.name, logged)
