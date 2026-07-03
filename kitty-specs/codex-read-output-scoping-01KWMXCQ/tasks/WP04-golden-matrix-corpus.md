@@ -171,4 +171,3 @@ This WP is the empirical acceptance surface (SC-001/002/003, NFR-001/002/004).
 - 2026-07-03T21:38:22Z – system – Prompt created.
 - 2026-07-03T23:17:29Z – claude – shell_pid=10089 – Fixture test (non-vacuous, black-box) + frozen-corpus diff (95->86, all FP, zero TP loss) + README C1 note; Codex APPROVE-WITH-NITS, determinism nit fixed. go test ./... green.
 - 2026-07-03T23:17:32Z – codex – shell_pid=13944 – Started review via action command
-- 2026-07-03T23:17:41Z – user – shell_pid=13944 – Codex APPROVE-WITH-NITS; determinism check strengthened to byte-identical findings. Corpus: -9 findings all verified FP, zero recall loss. NFR-004 schema unchanged.

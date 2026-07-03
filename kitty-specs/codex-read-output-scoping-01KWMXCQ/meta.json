@@ -1,24 +1,10 @@
 {
-  "accept_commit": "2d7bcd2b8b221abd1f271c78ef1c69cdf1dded07",
-  "acceptance_history": [
-    {
-      "accept_commit": "2d7bcd2b8b221abd1f271c78ef1c69cdf1dded07",
-      "acceptance_mode": "pr",
-      "accepted_at": "2026-07-03T23:20:26.416418+00:00",
-      "accepted_by": "kentgale",
-      "accepted_from_commit": "9257a3b06a428b4502de03569bec46fe19dd8856"
-    }
-  ],
-  "acceptance_mode": "pr",
-  "accepted_at": "2026-07-03T23:20:26.416418+00:00",
-  "accepted_by": "kentgale",
-  "accepted_from_commit": "9257a3b06a428b4502de03569bec46fe19dd8856",
   "coordination_branch": "kitty/mission-codex-read-output-scoping-01KWMXCQ",
   "created_at": "2026-07-03T21:15:42.043329+00:00",
   "flattened": false,
   "friendly_name": "Codex Read-Output Scoping",
   "mission_id": "01KWMXCQ2REFA6YRE04P3TP723",
-  "mission_number": null,
+  "mission_number": 2,
   "mission_slug": "codex-read-output-scoping-01KWMXCQ",
   "mission_type": "software-dev",
   "pr_bound": true,

@@ -1,0 +1,6 @@
+{"payload":{"type":"function_call","name":"exec_command","arguments":"{\"cmd\":\"git show HEAD:docs/cli.md\"}","call_id":"read1"}}
+{"payload":{"type":"function_call_output","call_id":"read1","output":"Chunk ID: 1\nWall time: 0.2 seconds\nProcess exited with code 0\nOriginal token count: 42\nOutput:\n# CLI reference\nDOC_CONTENT_SIG the analyzer surfaces bad flags as exit code 2\nUsage: spec-kitty analyze [OPTIONS] PATHS\nError: No such option is shown here only as documentation\nThe merge failed example below is documentation, not a real failure.\n"}}
+{"payload":{"type":"function_call","name":"exec_command","arguments":"{\"cmd\":\"git diff\"}","call_id":"read2"}}
+{"payload":{"type":"function_call_output","call_id":"read2","output":"Process exited with code 0\nOutput:\ndiff --git a/x b/x\n-old\n+new READDIFF_SIG line mentioning merge conflict in prose\n"}}
+{"payload":{"type":"function_call","name":"exec_command","arguments":"{\"cmd\":\"spec-kitty analyze --bogus\"}","call_id":"real1"}}
+{"payload":{"type":"function_call_output","call_id":"real1","output":"Process exited with code 2\nOutput:\nUsage: spec-kitty [OPTIONS] COMMAND [ARGS]...\nError: No such option: --bogus REAL_FAIL_SIG\n"}}
