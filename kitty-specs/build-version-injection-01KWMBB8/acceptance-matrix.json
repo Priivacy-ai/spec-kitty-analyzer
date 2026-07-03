@@ -2,67 +2,67 @@
   "mission_slug": "build-version-injection-01KWMBB8",
   "mission_number": "",
   "mission_type": "software-dev",
-  "overall_verdict": "pending",
+  "overall_verdict": "pass",
   "criteria": [
     {
       "criterion_id": "FR-001",
-      "description": "Verify FR-001 is satisfied",
+      "description": "version command reports version, commit, and build date on one line",
       "proof_type": "automated_test",
-      "evidence": null,
-      "pass_fail": "pending",
-      "verified_by": null,
-      "verified_at": null,
-      "notes": "TODO: replace with a real acceptance criterion"
+      "evidence": "TestVersionCommandOutput asserts `spec-kitty-analyzer dev (commit none, built unknown)`; injected form `0.3.0 (commit abc1234, built ...)` verified behaviorally.",
+      "pass_fail": "pass",
+      "verified_by": "claude (impl) + codex (per-WP review)",
+      "verified_at": "2026-07-03T17:52:24Z",
+      "notes": "go test ./... green; Codex-reviewed + approved."
     },
     {
       "criterion_id": "FR-002",
-      "description": "Verify FR-002 is satisfied",
+      "description": "analyze/query/missions JSON expose a nested `build` object (version, commit, build_date)",
       "proof_type": "automated_test",
-      "evidence": null,
-      "pass_fail": "pending",
-      "verified_by": null,
-      "verified_at": null,
-      "notes": "TODO: replace with a real acceptance criterion"
+      "evidence": "Nested `build` object asserted for Report (build_test.go), query.Result (query_test.go), missions (main_test.go); end-to-end `missions` JSON shows build{version,commit,build_date}.",
+      "pass_fail": "pass",
+      "verified_by": "claude (impl) + codex (per-WP review)",
+      "verified_at": "2026-07-03T17:52:24Z",
+      "notes": "go test ./... green; Codex-reviewed + approved."
     },
     {
       "criterion_id": "FR-003",
-      "description": "Verify FR-003 is satisfied",
+      "description": "tagged release build reports the tag-derived version + commit + date",
       "proof_type": "automated_test",
-      "evidence": null,
-      "pass_fail": "pending",
-      "verified_by": null,
-      "verified_at": null,
-      "notes": "TODO: replace with a real acceptance criterion"
+      "evidence": "Simulated tag build via `-ldflags -X` (lowercase module path) reports 0.3.0/commit/date; WP02 release.yml injects on both build lines, tag-gated (C-006).",
+      "pass_fail": "pass",
+      "verified_by": "claude (impl) + codex (per-WP review)",
+      "verified_at": "2026-07-03T17:52:24Z",
+      "notes": "go test ./... green; Codex-reviewed + approved."
     },
     {
       "criterion_id": "FR-004",
-      "description": "Verify FR-004 is satisfied",
+      "description": "non-release/local build reports sentinels dev/none/unknown",
       "proof_type": "automated_test",
-      "evidence": null,
-      "pass_fail": "pending",
-      "verified_by": null,
-      "verified_at": null,
-      "notes": "TODO: replace with a real acceptance criterion"
+      "evidence": "TestCurrentBuildDefaults + `version` dev output = dev/none/unknown; WP02 gate leaves sentinels on non-tag runs (gating simulated).",
+      "pass_fail": "pass",
+      "verified_by": "claude (impl) + codex (per-WP review)",
+      "verified_at": "2026-07-03T17:52:24Z",
+      "notes": "go test ./... green; Codex-reviewed + approved."
     },
     {
       "criterion_id": "FR-005",
-      "description": "Verify FR-005 is satisfied",
+      "description": "top-level `version` field removed from all JSON output",
       "proof_type": "automated_test",
-      "evidence": null,
-      "pass_fail": "pending",
-      "verified_by": null,
-      "verified_at": null,
-      "notes": "TODO: replace with a real acceptance criterion"
+      "evidence": "All three emitter tests assert ABSENCE of top-level `version` key; end-to-end `missions` JSON has no top-level version.",
+      "pass_fail": "pass",
+      "verified_by": "claude (impl) + codex (per-WP review)",
+      "verified_at": "2026-07-03T17:52:24Z",
+      "notes": "go test ./... green; Codex-reviewed + approved."
     },
     {
       "criterion_id": "FR-006",
-      "description": "Verify FR-006 is satisfied",
+      "description": "published release documents the JSON schema change as breaking",
       "proof_type": "automated_test",
-      "evidence": null,
-      "pass_fail": "pending",
-      "verified_by": null,
-      "verified_at": null,
-      "notes": "TODO: replace with a real acceptance criterion"
+      "evidence": "docs/releases/release-notes-0.3.0.md documents the `.version`->`.build.version` breaking change (Codex-reviewed, 2 cycles); published at release via `gh release edit --notes-file`.",
+      "pass_fail": "pass",
+      "verified_by": "claude (impl) + codex (per-WP review)",
+      "verified_at": "2026-07-03T17:52:24Z",
+      "notes": "go test ./... green; Codex-reviewed + approved."
     }
   ],
   "negative_invariants": []
