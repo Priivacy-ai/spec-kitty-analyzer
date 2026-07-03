@@ -43,3 +43,31 @@ func TestOpenOpOrphanRequiresRealOpEvent(t *testing.T) {
 		t.Fatal("open_op_orphan did not fire for a real kitty-ops-backed open op")
 	}
 }
+
+// TestIsOpLogPath guards the Codex review fix: the op-log signal must match a
+// real kitty-ops/<id>.jsonl source whether the path is absolute or a relative
+// top-level path (no leading slash) — else genuine orphan findings get suppressed.
+func TestIsOpLogPath(t *testing.T) {
+	id := "c03904a5846f4232a42bf568546961d8"
+	yes := []string{
+		"kitty-ops/" + id + ".jsonl",                   // relative top-level (the MEDIUM finding)
+		"./kitty-ops/" + id + ".jsonl",                 // relative with dot
+		"/Users/x/.kittify/kitty-ops/" + id + ".jsonl", // absolute
+	}
+	no := []string{
+		"/Users/x/.claude/projects/session.jsonl", // harness transcript
+		"kitty-specs/mission/status.events.jsonl", // mission event log, not an op log
+		"kitty-ops/" + id + ".txt",                // wrong extension
+		"",
+	}
+	for _, p := range yes {
+		if !isOpLogPath(p) {
+			t.Errorf("isOpLogPath(%q)=false want true", p)
+		}
+	}
+	for _, p := range no {
+		if isOpLogPath(p) {
+			t.Errorf("isOpLogPath(%q)=true want false", p)
+		}
+	}
+}
