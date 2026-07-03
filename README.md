@@ -56,7 +56,7 @@ Mission-first mode scans harness logs, caches mission-to-log mappings in
 `~/.spec-kitty-analyzer/cache.json`, then reports only the selected mission:
 
 ```bash
-go run ./cmd/spec-kitty-analyzer analyze task-workflow-bug-fixes-01KV69BZ \
+spec-kitty-analyzer analyze task-workflow-bug-fixes-01KV69BZ \
   --out spec-kitty-analyzer-report.json
 ```
 
@@ -76,7 +76,7 @@ repeatable `--log-root` flags.
 Explicit path mode still works for direct analysis:
 
 ```bash
-go run ./cmd/spec-kitty-analyzer analyze \
+spec-kitty-analyzer analyze \
   /path/to/repo/kitty-specs \
   /path/to/repo/kitty-ops \
   ~/.codex/sessions \
@@ -85,6 +85,9 @@ go run ./cmd/spec-kitty-analyzer analyze \
 
 By default the command writes JSON, Markdown, HTML, and PDF reports next to the
 JSON path. Use `--json-only` for structured output only.
+
+(Running from source instead of an install? Replace `spec-kitty-analyzer` with
+`go run ./cmd/spec-kitty-analyzer` in any command above.)
 
 ## Agent JSON API
 
@@ -140,6 +143,42 @@ Selectors can be repeated or comma-separated:
 
 Rules are deterministic regex/JSON-field recognizers, grounded in Spec Kitty
 skills and CLI behavior: blocked runtime decisions, guard failures, missing
-artifacts, wrong command surface, dirty worktree/ref-advance failures, stale
-agents, review rejections, sync/auth boundary failures, tracker binding gaps,
-namespace-package import failures, and unclosed Ops.
+artifacts, wrong command surface, branch/worktree confusion, merge failures,
+dirty worktree/ref-advance failures, permission and EPERM denials, stale agents,
+review rejections (including structural status events), sync/auth boundary
+failures, tracker binding gaps, namespace-package import failures, and unclosed
+Ops.
+
+Matching is **channel-scoped**: each rule runs against real command/tool output
+and structured error fields, not against narrative discussion of a problem. An
+agent *talking about* an error — or a file or diff that merely contains an error
+phrase — does not register as a failure. This sharply reduces false positives
+while preserving the distinctive signatures that indicate a real, observed
+condition.
+
+## Limitations
+
+The analyzer is deterministic and pattern-based: it recognizes *documented* Spec
+Kitty failure modes from real output channels. That keeps false positives low,
+but there are known boundaries worth setting expectations around:
+
+- **Validated primarily against a macOS + Claude/Codex corpus.** Error and denial
+  phrasings specific to other platforms or shells (for example Windows
+  `Access is denied`, fish/PowerShell, some Java/.NET forms) are not all covered
+  yet, so detection on those environments is partial ([#6]).
+- **Codex file-inspection output** — a `cat`/`grep`/`git show` surfaced as a tool
+  result — is currently scanned as command output, so file or document *content*
+  that merely contains an error phrase can occasionally produce a false positive
+  ([#13]).
+- **Known failure modes only.** Novel failures that match no rule are not
+  surfaced yet; a segregated "unclassified anomaly" trap to preserve recall on new
+  failure modes is planned ([#15]).
+- **Local-first and read-only.** It reads harness logs under your home directory
+  (Claude, Codex, `.agents`, OpenCode); it does not fetch or modify remote state.
+
+Precision and recall are tracked in the issue tracker — reports of false
+positives or missed failures against your own logs are welcome.
+
+[#6]: https://github.com/Priivacy-ai/spec-kitty-analyzer/issues/6
+[#13]: https://github.com/Priivacy-ai/spec-kitty-analyzer/issues/13
+[#15]: https://github.com/Priivacy-ai/spec-kitty-analyzer/issues/15
