@@ -125,11 +125,11 @@ extraction, and thread the resulting `channelContext` through the file walk so
 test-first) — a paired `function_call`(read) + `function_call_output`(exit 0) yields no read-content finding.
 **Prompt**: [tasks/WP03-prepass-threading.md](./tasks/WP03-prepass-threading.md)
 
-- [ ] T017 Analyzer integration test (TEST-FIRST): ABSENCE of read-content FPs + recall (WP03)
-- [ ] T011 Per-file prepass `buildCodexContext(data)` → registry (WP03)
-- [ ] T012 Thread `channelContext` through parseFile → eventFromText → channelStringsForEvent (WP03)
-- [ ] T013 Call context-aware pair when ctx present; keep stateless paths unchanged (WP03)
-- [ ] T014 Build prepass once per file; empty ctx for non-codex files (WP03)
+- [x] T017 Analyzer integration test (TEST-FIRST): ABSENCE of read-content FPs + recall (WP03)
+- [x] T011 Per-file prepass `buildCodexContext(data)` → registry (WP03)
+- [x] T012 Thread `channelContext` through parseFile → eventFromText → channelStringsForEvent (WP03)
+- [x] T013 Call context-aware pair when ctx present; keep stateless paths unchanged (WP03)
+- [x] T014 Build prepass once per file; empty ctx for non-codex files (WP03)
 
 **Dependencies**: WP01, WP02. **Risks**: the prepass must key off the SAME per-file scope as
 extraction; the prepass (not inline threaded state) is what gives out-of-order tolerance (Codex rec 1);
