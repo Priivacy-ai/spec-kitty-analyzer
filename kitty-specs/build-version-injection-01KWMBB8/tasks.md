@@ -36,13 +36,13 @@
 - **Independent test**: `go build ./... && go vet ./... && go test ./...` green; `go run ./cmd/spec-kitty-analyzer version` prints `spec-kitty-analyzer dev (commit none, built unknown)`; a marshaled report/missions/query has a `build` object and no top-level `version`.
 - **Dependencies**: none
 - **Included subtasks**:
-  - [ ] T001 const→vars + Build struct + CurrentBuild + Report.Build (WP01)
-  - [ ] T002 analyzer.go Report construction (WP01)
-  - [ ] T003 missions struct Build field (WP01)
-  - [ ] T004 query.go QueryResult Build field (WP01)
-  - [ ] T005 version command output (WP01)
-  - [ ] T006 migrate existing Version-reading tests (WP01)
-  - [ ] T007 add sentinel + JSON-shape + missions cmd tests (WP01)
+  - [x] T001 const→vars + Build struct + CurrentBuild + Report.Build (WP01)
+  - [x] T002 analyzer.go Report construction (WP01)
+  - [x] T003 missions struct Build field (WP01)
+  - [x] T004 query.go QueryResult Build field (WP01)
+  - [x] T005 version command output (WP01)
+  - [x] T006 migrate existing Version-reading tests (WP01)
+  - [x] T007 add sentinel + JSON-shape + missions cmd tests (WP01)
 - **Estimated prompt size**: ~330 lines
 - **Risks**: missing one of the three emitters leaves an inconsistent schema; tests must assert the *absence* of top-level `version`.
 
