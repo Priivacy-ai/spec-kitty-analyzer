@@ -103,14 +103,14 @@ content excluded from BOTH channels (§3a mirror), envelope-aware. Map the remai
 exercise `channelTextPairCtx` with a hand-built `channelContext` in `channels_test.go`.
 **Prompt**: [tasks/WP02-channel-context-gating.md](./tasks/WP02-channel-context-gating.md)
 
-- [ ] T015 Golden channel-matrix cases, rows 1–7 (TEST-FIRST) (WP02)
-- [ ] T016 Payload-type mapping golden cases (TEST-FIRST) (WP02)
-- [ ] T005 Define `codexCall` + `channelContext` types; `codexCallID` helper (WP02)
-- [ ] T006 Context-aware entrypoint; preserve stateless `channelTextPair(obj)` (WP02)
-- [ ] T007 `function_call` case: build + register `codexCall` (excluded) (WP02)
-- [ ] T008 `function_call_output` gating (exit0 exclude / non-zero header / else scan) (WP02)
-- [ ] T009 New payload types `task_started`/`user_message`/empty; unchanged types untouched (WP02)
-- [ ] T010 §3a mirror + determinism guard (WP02)
+- [x] T015 Golden channel-matrix cases, rows 1–7 (TEST-FIRST) (WP02)
+- [x] T016 Payload-type mapping golden cases (TEST-FIRST) (WP02)
+- [x] T005 Define `codexCall` + `channelContext` types; `codexCallID` helper (WP02)
+- [x] T006 Context-aware entrypoint; preserve stateless `channelTextPair(obj)` (WP02)
+- [x] T007 `function_call` case: build + register `codexCall` (excluded) (WP02)
+- [x] T008 `function_call_output` gating (exit0 exclude / non-zero header / else scan) (WP02)
+- [x] T009 New payload types `task_started`/`user_message`/empty; unchanged types untouched (WP02)
+- [x] T010 §3a mirror + determinism guard (WP02)
 
 **Dependencies**: WP01. **Risks**: must preserve the stateless `channelTextPair(obj)` (empty ctx) —
 existing tests depend on it; envelope parser must be tolerant (unknown → scan); do not regress
