@@ -20,8 +20,8 @@ subtasks:
 - T010
 - T011
 phase: Phase 2 - Release integration
-agent: claude
-shell_pid: '8007'
+agent: "codex"
+shell_pid: "9126"
 history:
 - at: '2026-07-03T16:30:00Z'
   actor: system
@@ -151,3 +151,5 @@ Make tagged release builds stamp the real version, commit, and build date into a
 ## Activity Log
 
 - 2026-07-03T17:33:03Z – claude – shell_pid=8007 – WP02 complete: tag-gated ldflags injection, both build lines, footgun guard. YAML valid; gating simulated (tag→stamps, branch→sentinels); -X path proven to resolve in WP01 verification.
+- 2026-07-03T17:33:19Z – codex – shell_pid=9126 – Started review via action command
+- 2026-07-03T17:34:47Z – user – shell_pid=9126 – Codex APPROVE, no findings: lowercase -X path, both build lines, C-006 tag-gating, C-002 footgun guard all verified.
