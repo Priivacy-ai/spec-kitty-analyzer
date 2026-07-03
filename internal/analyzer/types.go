@@ -2,10 +2,27 @@ package analyzer
 
 import "time"
 
-const Version = "0.2.0"
+// Build metadata. Defaults mark a non-release (local) build; release.yml
+// overrides all three via -ldflags -X at build time. These MUST be vars,
+// not consts — ldflags -X can only overwrite string variables.
+var (
+	Version   = "dev"
+	Commit    = "none"
+	BuildDate = "unknown"
+)
+
+// Build is the provenance of a compiled binary: one cohesive value.
+type Build struct {
+	Version   string `json:"version"`
+	Commit    string `json:"commit"`
+	BuildDate string `json:"build_date"`
+}
+
+// CurrentBuild is the sole constructor for build provenance.
+func CurrentBuild() Build { return Build{Version, Commit, BuildDate} }
 
 type Report struct {
-	Version     string           `json:"version"`
+	Build       Build            `json:"build"`
 	GeneratedAt time.Time        `json:"generated_at"`
 	Inputs      []InputFile      `json:"inputs"`
 	Summary     Summary          `json:"summary"`
@@ -77,7 +94,7 @@ type TimelineEvent struct {
 	// strings the scoped failure rules matched against, retained so a later pass
 	// (e.g. the Tier-3 anomaly trap, separate PR) can reuse them without a second
 	// extraction walk. UNEXPORTED on purpose: encoding/json never serializes them,
-	// so the report schema / report.version is unchanged (NFR-003). In-memory only.
+	// so they never affect the report JSON schema (NFR-003). In-memory only.
 	outputCh     string
 	diagnosticCh string
 }

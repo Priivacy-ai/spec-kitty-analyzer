@@ -120,4 +120,3 @@ Produce the curated release-notes draft at `docs/releases/release-notes-0.3.0.md
 - 2026-07-03T17:38:35Z – claude – shell_pid=11918 – Started implementation via action command
 - 2026-07-03T17:39:12Z – claude – shell_pid=11918 – Cycle-2: JSON examples now valid + contract-matching (codex cycle-1 blocker fixed).
 - 2026-07-03T17:39:35Z – codex – shell_pid=12430 – Started review via action command
-- 2026-07-03T17:40:53Z – user – shell_pid=12430 – Codex cycle-2 APPROVE: JSON examples valid + contract-matching; all other DoD items confirmed.

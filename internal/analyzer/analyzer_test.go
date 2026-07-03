@@ -243,7 +243,7 @@ func TestFlattenJSONIsDeterministic(t *testing.T) {
 
 func TestMissionFilterExcludesOtherMissionScope(t *testing.T) {
 	report := Report{
-		Version:     Version,
+		Build:       CurrentBuild(),
 		GeneratedAt: time.Now(),
 		Redactions:  map[string]int{},
 		Surface:     defaultSurface(),

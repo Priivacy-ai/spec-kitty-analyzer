@@ -31,6 +31,21 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p dist
+          # Build metadata is stamped ONLY for tag-triggered releases. On a manual
+          # workflow_dispatch run GITHUB_REF_NAME is a branch name, so we must NOT
+          # stamp it (C-006 / INV-2) — leave LDFLAGS_META empty so binaries keep the
+          # dev/none/unknown sentinels.
+          PKG=github.com/priivacy-ai/spec-kitty-analyzer/internal/analyzer
+          LDFLAGS_META=""
+          if [[ "${GITHUB_REF_TYPE}" == "tag" ]]; then
+            VERSION="${GITHUB_REF_NAME#v}"
+            COMMIT="$(git rev-parse --short HEAD)"
+            BUILD_DATE="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+            LDFLAGS_META="-X ${PKG}.Version=${VERSION} -X ${PKG}.Commit=${COMMIT} -X ${PKG}.BuildDate=${BUILD_DATE}"
+            echo "Stamping release build: version=${VERSION} commit=${COMMIT} date=${BUILD_DATE}"
+          else
+            echo "Non-tag build (ref_type=${GITHUB_REF_TYPE:-unset}); binaries keep dev/none/unknown sentinels"
+          fi
           targets=(
             "linux amd64"
             "linux arm64"
@@ -49,14 +64,24 @@ jobs:
             cp skills/spec-kitty-analyzer/SKILL.md "${stage}/skills/spec-kitty-analyzer/SKILL.md"
             cp install/install.sh install/install.ps1 "${stage}/install/"
             if [[ "${os}" == "windows" ]]; then
-              CGO_ENABLED=0 GOOS="${os}" GOARCH="${arch}" go build -trimpath -ldflags="-s -w" -o "${stage}/spec-kitty-analyzer.exe" ./cmd/spec-kitty-analyzer
+              CGO_ENABLED=0 GOOS="${os}" GOARCH="${arch}" go build -trimpath -ldflags="-s -w ${LDFLAGS_META}" -o "${stage}/spec-kitty-analyzer.exe" ./cmd/spec-kitty-analyzer
               (cd "${stage}" && zip -qr "../${package}.zip" .)
             else
-              CGO_ENABLED=0 GOOS="${os}" GOARCH="${arch}" go build -trimpath -ldflags="-s -w" -o "${stage}/spec-kitty-analyzer" ./cmd/spec-kitty-analyzer
+              CGO_ENABLED=0 GOOS="${os}" GOARCH="${arch}" go build -trimpath -ldflags="-s -w ${LDFLAGS_META}" -o "${stage}/spec-kitty-analyzer" ./cmd/spec-kitty-analyzer
               chmod +x "${stage}/spec-kitty-analyzer" "${stage}/install/install.sh"
               tar -C "${stage}" -czf "dist/${package}.tar.gz" .
             fi
           done
+          # Footgun guard (C-002): a wrong -X module path fails silently. On a tag
+          # build the linux/amd64 binary must NOT still report 'dev'.
+          if [[ "${GITHUB_REF_TYPE}" == "tag" ]]; then
+            ver_out="$(dist/spec-kitty-analyzer_linux_amd64/spec-kitty-analyzer version || true)"
+            echo "verify injected version: ${ver_out}"
+            case "${ver_out}" in
+              *"dev (commit none"*)
+                echo "::error::ldflags injection failed — binary still reports 'dev' (check the -X module path: ${PKG})"; exit 1;;
+            esac
+          fi
           cp install/install.sh dist/install.sh
           cp install/install.ps1 dist/install.ps1
           chmod +x dist/install.sh
