@@ -16,8 +16,8 @@ subtasks:
 - T013
 - T014
 phase: Phase 2 - Release integration
-agent: claude
-shell_pid: '10100'
+agent: "claude"
+shell_pid: "11918"
 history:
 - at: '2026-07-03T16:30:00Z'
   actor: system
@@ -115,3 +115,7 @@ Produce the curated release-notes draft at `docs/releases/release-notes-0.3.0.md
 ## Activity Log
 
 - 2026-07-03T17:36:02Z – claude – shell_pid=10100 – WP03 complete: docs/releases/release-notes-0.3.0.md with breaking-change section, before/after JSON matching contract, migration + --notes-file reminder.
+- 2026-07-03T17:36:22Z – codex – shell_pid=10768 – Started review via action command
+- 2026-07-03T17:38:16Z – user – shell_pid=10768 – Moved to planned
+- 2026-07-03T17:38:35Z – claude – shell_pid=11918 – Started implementation via action command
+- 2026-07-03T17:39:12Z – claude – shell_pid=11918 – Cycle-2: JSON examples now valid + contract-matching (codex cycle-1 blocker fixed).
