@@ -22,12 +22,13 @@ history:
   actor: system
   action: Prompt generated via /spec-kitty.tasks
 agent_profile: curator-carla
-authoritative_surface: kitty-specs/build-version-injection-01KWMBB8/
-create_intent: []
-execution_mode: planning_artifact
+authoritative_surface: docs/releases/
+create_intent:
+- docs/releases/release-notes-0.3.0.md
+execution_mode: code_change
 model: ''
 owned_files:
-- kitty-specs/build-version-injection-01KWMBB8/release-notes-0.3.0.md
+- docs/releases/release-notes-0.3.0.md
 role: curator
 tags: []
 task_type: implement
@@ -53,7 +54,7 @@ Wrap HTML/XML tags in backticks. Use language identifiers in code blocks.
 
 ## Objective
 
-Produce the curated `release-notes-0.3.0.md` draft (in this mission dir) that documents the removed top-level `version` field as a **breaking change** with clear consumer migration guidance. This is the artifact the 0.3.0 release runbook swaps into the published GitHub Release via `gh release edit --notes-file` (the proven 0.2.0 mechanism) — NOT the workflow's auto-generated notes, which would drop the warning (FR-006, research R7).
+Produce the curated release-notes draft at `docs/releases/release-notes-0.3.0.md` that documents the removed top-level `version` field as a **breaking change** with clear consumer migration guidance. This is the artifact the 0.3.0 release runbook swaps into the published GitHub Release via `gh release edit --notes-file` (the proven 0.2.0 mechanism) — NOT the workflow's auto-generated notes, which would drop the warning (FR-006, research R7).
 
 **Out of scope**: introducing `CHANGELOG.md` or notes-delivery automation (that is issue #20).
 
@@ -71,7 +72,7 @@ Produce the curated `release-notes-0.3.0.md` draft (in this mission dir) that do
 
 ### T012 — Draft the release notes
 
-**Create** `kitty-specs/build-version-injection-01KWMBB8/release-notes-0.3.0.md` with:
+**Create** `docs/releases/release-notes-0.3.0.md` with:
 1. A one-line summary: binaries now self-report version + commit + build date; local builds report `dev`.
 2. An **### Added** section: `version` command and JSON now expose a structured `build` object (`build.version`, `build.commit`, `build.build_date`); release builds stamp real values via ldflags (closes #19, #21).
 3. A prominent **### ⚠️ Breaking change** section: the top-level `version` field is **removed** from `analyze` / `query` / `missions` JSON output; consumers must read `.build.version`.

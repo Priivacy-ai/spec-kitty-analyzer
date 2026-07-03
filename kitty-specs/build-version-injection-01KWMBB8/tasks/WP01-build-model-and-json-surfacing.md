@@ -31,7 +31,9 @@ history:
   action: Prompt generated via /spec-kitty.tasks
 agent_profile: implementer-ivan
 authoritative_surface: internal/analyzer/
-create_intent: []
+create_intent:
+- internal/analyzer/build_test.go
+- cmd/spec-kitty-analyzer/main_test.go
 execution_mode: code_change
 model: ''
 owned_files:
