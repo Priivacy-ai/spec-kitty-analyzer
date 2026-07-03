@@ -25,7 +25,7 @@ subtasks:
 - T007
 phase: Phase 1 - Foundation
 agent: "claude"
-shell_pid: "96597"
+shell_pid: "5812"
 history:
 - at: '2026-07-03T16:30:00Z'
   actor: system
@@ -202,3 +202,7 @@ This WP is the foundation. WP02 (release-workflow injection) and WP03 (release n
 
 - 2026-07-03T16:58:44Z – claude – shell_pid=96597 – Assigned agent via action command
 - 2026-07-03T17:07:15Z – claude – shell_pid=96597 – WP01 complete: build model + nested-build JSON + version cmd + tests; go build/vet/test green; behavioral acceptance (dev sentinels, injected 0.3.0, JSON build object + no top-level version) verified end-to-end. Includes analysis finding C1 (version-output test).
+- 2026-07-03T17:21:36Z – codex – shell_pid=4210 – Started review via action command
+- 2026-07-03T17:25:09Z – user – shell_pid=4210 – Moved to planned
+- 2026-07-03T17:25:36Z – claude – shell_pid=5812 – Started implementation via action command
+- 2026-07-03T17:27:38Z – claude – shell_pid=5812 – Cycle-2: addressed all 3 codex findings (query Result contract test, missions build sub-field asserts, stale comment). go build/vet/test green.
