@@ -35,11 +35,15 @@ func CurrentBuild() Build { return Build{Version, Commit, BuildDate} }
 - **INV-2**: A binary reports either a full release triple (all three injected) or the full sentinel triple — never a real version with `none`/`unknown` provenance from a release build.
 - **INV-3**: `Build` is emitted as a nested object under the `build` key; `version` never appears as a top-level JSON field (breaking contract vs. pre-0.3.0).
 
-### Consumers (embed the `build` object under `json:"build"`)
+### Consumers (nest the `build` object under `json:"build"`, as the FIRST field)
 
-- `analyzer.Report` — replaces its current top-level `Version string json:"version"` field with `Build Build json:"build"`.
+Each emitter replaces its current first field `Version string json:"version"` with `Build Build json:"build"`, keeping `Build` first so the `build` object leads the marshaled JSON (R8):
+
+- `analyzer.Report` — `Version` → `Build` (first field).
 - `missions` result struct (`cmd/spec-kitty-analyzer/main.go`) — same replacement.
 - `query.QueryResult` — same replacement; sourced from the report's `Build`.
+
+`Build` is a **named** field (`Build Build json:"build"`), not an embedded/anonymous field — embedding would promote `version`/`commit`/`build_date` back to the top level, which is exactly the flat shape C1 rejects.
 
 ### State transitions
 

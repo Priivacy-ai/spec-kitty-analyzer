@@ -16,11 +16,12 @@ Phase 0 decisions. No `[NEEDS CLARIFICATION]` markers remain (all resolved with 
 - **Rationale**: `-X` silently no-ops if the symbol path is wrong — no error, no warning; the binary just keeps the default. The GitHub org is `Priivacy-ai` (capital P) but the Go module path is lowercase, an easy and invisible mismatch. Verified against `go.mod` line 1.
 - **Verification**: A build check greps the `version` command output for the injected value; a mismatch (still `dev`) fails the check.
 
-## R3 — Value sources in CI
+## R3 — Value sources in CI, gated on tag pushes (Codex HIGH-1)
 
-- **Decision**: `Version = ${GITHUB_REF_NAME#v}` (strip leading `v`), `Commit = $(git rev-parse --short HEAD)`, `BuildDate = $(date -u +%Y-%m-%dT%H:%M:%SZ)`.
-- **Rationale**: `GITHUB_REF_NAME` is the tag that triggered `release.yml` (`on: push: tags: v*`); stripping `v` gives a clean SemVer string matching `analyzer.Version`'s historical form. UTC ISO-8601 (C-004) is unambiguous and sortable.
-- **Alternatives**: `git describe --tags` — redundant when the ref is already the tag; can append `-g<sha>` noise. Rejected.
+- **Decision**: Stamp only when the triggering ref is a tag. Guard the build step on `GITHUB_REF_TYPE == 'tag'`; when true, `Version = ${GITHUB_REF_NAME#v}` (strip leading `v`), `Commit = $(git rev-parse --short HEAD)`, `BuildDate = $(date -u +%Y-%m-%dT%H:%M:%SZ)`. When false (manual `workflow_dispatch`, branch run), inject nothing — the binary keeps the `dev`/`none`/`unknown` sentinels.
+- **Rationale**: `release.yml` allows BOTH `on: push: tags: v*` AND `workflow_dispatch`. On a manual dispatch, `GITHUB_REF_NAME` is the *branch* name, so stamping unconditionally would brand a binary `main`/`<branch>` — a value that is neither a real release version nor the sentinel, violating INV-2 (C-006). Gating on `GITHUB_REF_TYPE` closes that hole while keeping manual dispatch available for re-runs. UTC ISO-8601 (C-004) is unambiguous and sortable.
+- **Alternatives**: (a) remove `workflow_dispatch` entirely — simpler but loses a useful manual re-run path; rejected in favor of gating. (b) `git describe --tags` — redundant when the ref is already the tag; can append `-g<sha>` noise. Rejected.
+- **Verification**: quickstart/CI check asserts a tagged build shows the injected version and a non-tag build shows `dev`.
 
 ## R4 — Local/dev default sentinels
 
@@ -33,12 +34,19 @@ Phase 0 decisions. No `[NEEDS CLARIFICATION]` markers remain (all resolved with 
 - **Rationale**: Provenance is one cohesive thing → one object (deep-module-design). Named field (not Go embedding) produces the nested shape. C1 clean break chosen over additive C3 because 0.x + tiny known consumer set makes now the cheapest time to break; ships in 0.3.0 (breaking → minor bump per SemVer).
 - **Alternatives**: flat sibling fields (A/B) — scatters provenance, triplicates fields; additive C3 (keep top-level `version` + `build:{commit,build_date}`) — non-breaking but splits version from its siblings. Both rejected per maintainer decision.
 
-## R6 — Test strategy (specification-by-example)
+## R6 — Test strategy (specification-by-example), incl. existing-test updates (Codex MEDIUM-3)
 
-- **Decision**: Unit tests assert (a) un-injected `CurrentBuild()` returns the sentinels; (b) marshaled JSON for `Report`/`missions`/`query` contains a `build` object with the three fields AND has **no** top-level `version` key (guards the breaking contract in both directions); keep `go test ./...` green.
-- **Rationale**: Asserting the *absence* of top-level `version` is what actually protects FR-005; presence-of-`build` alone would pass even if the old field leaked.
+- **Decision**: Unit tests assert (a) un-injected `CurrentBuild()` returns the sentinels; (b) marshaled JSON for `Report`, `missions`, AND `query` each contains a `build` object with the three fields AND has **no** top-level `version` key (guards the breaking contract in both directions); keep `go test ./...` green.
+- **Existing tests that must be updated (not just added to)**: `internal/query/query_test.go` (~line 10) and `internal/analyzer/analyzer_test.go` (~line 245) currently construct/read `Version` directly — they will fail to compile once the field becomes `Build`, so NFR-001 requires migrating them to read `Build`. The `missions` output has no `cmd`-level test today; add one so all three JSON surfaces are covered.
+- **Rationale**: Asserting the *absence* of top-level `version` is what actually protects FR-005; presence-of-`build` alone would pass even if the old field leaked. Covering all three emitters (including a new `missions` cmd test) prevents an inconsistent schema slipping through one un-tested surface.
 
-## R7 — FR-006 breaking-change documentation scope
+## R7 — FR-006 breaking-change documentation scope + delivery (Codex HIGH-2)
 
-- **Decision**: Satisfy FR-006 via the PR body's breaking-change callout plus a short `release-notes-0.3.0` draft kept in the mission dir. Do NOT introduce `CHANGELOG.md` here.
-- **Rationale**: Formal Keep-a-Changelog adoption is its own mission (issue #20); creating `CHANGELOG.md` now would overlap and pre-empt that design. This mission documents the break where it lands (PR + release notes) without claiming the changelog-automation work.
+- **Decision**: This mission produces a curated `release-notes-0.3.0.md` draft (in the mission dir) that explicitly carries the `.version` → `.build.version` migration note, plus the PR body callout. At release time the note reaches the **published GitHub Release body** via the proven curated-notes swap (`gh release edit --notes-file …`, exactly as done for 0.2.0), NOT via the workflow's `generate_release_notes` auto-list. Do NOT introduce `CHANGELOG.md` or wire `body_path` into `release.yml` here.
+- **Rationale**: Codex correctly flagged that `generate_release_notes: true` alone would let the breaking change ship without a warning in the published release. The curated-notes swap already guarantees a human-authored body at release time (proven on 0.2.0), so FR-006 is satisfied without new automation. Fully automating notes delivery (`body_path`, changelog extraction) is issue #20's design and would overlap it — explicitly deferred.
+- **Release-time reminder**: the 0.3.0 release runbook MUST use `--notes-file release-notes-0.3.0.md`; relying on auto-notes would drop the breaking-change warning.
+
+## R8 — JSON field ordering (Codex LOW-4)
+
+- **Decision**: Make `Build` the **first field** in each emitter struct (`analyzer.Report`, the `missions` result struct, `query.QueryResult`), so the `build` object appears first in the marshaled JSON as the contract's examples show.
+- **Rationale**: Go's `encoding/json` emits fields in struct-declaration order. `Build` cleanly replaces `Version`, which is already the first field in these structs, so this is the natural drop-in and keeps the contract examples accurate rather than aspirational.

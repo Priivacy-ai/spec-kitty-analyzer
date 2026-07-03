@@ -51,7 +51,7 @@ Closes #19 (version from tag, not a drift-prone constant) and #21 (emit commit +
 | FR-003 | A binary produced by the tagged release build reports the release version derived from the git tag, the commit it was built from, and the build timestamp. | Draft |
 | FR-004 | A binary produced by any non-release (local) build reports sentinel values: version `dev`, commit `none`, build date `unknown`. | Draft |
 | FR-005 | The top-level `version` field is removed from all JSON output; version is available only under the `build` object. | Draft |
-| FR-006 | The release notes / changelog for the shipping release document the JSON schema change (removal of top-level `version`) as a breaking change. | Draft |
+| FR-006 | The published GitHub Release body for the shipping release documents the JSON schema change (removal of top-level `version`) as a breaking change, including the `.version` → `.build.version` migration note. Satisfied by a curated release-notes file swapped into the release (the proven 0.2.0 mechanism); full notes-delivery automation is out of scope (issue #20). | Draft |
 
 ### Non-Functional Requirements
 
@@ -70,6 +70,7 @@ Closes #19 (version from tag, not a drift-prone constant) and #21 (emit commit +
 | C-003 | Injection is applied to every release target — both the Windows and the non-Windows build invocations in the release workflow (all six OS/arch packages). | Draft |
 | C-004 | The build date is recorded in UTC ISO-8601 (e.g. `2026-07-03T18:00:00Z`). | Draft |
 | C-005 | This is a breaking change to the JSON output schema. It ships under a version bump with a changelog breaking-change note. Target release: **0.3.0** — a breaking change to the public JSON output contract warrants a minor bump under SemVer (patch is reserved for backwards-compatible fixes). Decision recorded per DIRECTIVE_003; the small, known consumer set makes the break low-risk to execute now. | Draft |
+| C-006 | Version/commit/date stamping applies **only to tag-triggered release builds**. Because the workflow also allows `workflow_dispatch`, injection must be gated on the ref being a tag (`GITHUB_REF_TYPE == 'tag'`); any non-tag run (manual dispatch, branch) must fall back to the sentinel defaults (`dev`/`none`/`unknown`) so no build is ever stamped with a branch name. Enforces INV-2. | Draft |
 
 ## Success Criteria
 

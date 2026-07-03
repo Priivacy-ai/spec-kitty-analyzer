@@ -12,11 +12,11 @@ Replace the hand-edited `const Version` with build-time-injected package variabl
 **Language/Version**: Go 1.25.0 (single module `github.com/priivacy-ai/spec-kitty-analyzer`)
 **Primary Dependencies**: Standard library only (`encoding/json`, `flag`, `fmt`); no third-party runtime deps introduced. Build/CI: `go build`, `-ldflags -X`, GitHub Actions `release.yml`.
 **Storage**: N/A (build metadata is compiled into the binary; no persistence)
-**Testing**: `go test ./...` (existing suite, 6 test files) plus new unit coverage asserting: (a) sentinel defaults for an un-injected build, (b) `Build` value composition, (c) JSON emits a nested `build` object and no top-level `version`.
+**Testing**: `go test ./...` (existing suite, 6 test files) plus new unit coverage asserting: (a) sentinel defaults for an un-injected build, (b) `Build` value composition, (c) JSON emits a nested `build` object and no top-level `version` across all three emitters. **Existing tests reading `Version` directly must be migrated** to `Build` (`internal/query/query_test.go`, `internal/analyzer/analyzer_test.go`), and a new `missions` cmd test added.
 **Target Platform**: 6 release targets — {linux, darwin, windows} × {amd64, arm64}
 **Project Type**: single (Go CLI + internal packages)
 **Performance Goals**: N/A (no runtime hot path affected; injection is compile-time)
-**Constraints**: `-ldflags -X` symbol path MUST be the lowercase module path `github.com/priivacy-ai/spec-kitty-analyzer/internal/analyzer` (a wrong path silently no-ops — C-002); injection applied to BOTH the windows `.exe` and non-windows build invocations (C-003); `build_date` in UTC ISO-8601 (C-004); `go test ./...` stays green (NFR-001).
+**Constraints**: `-ldflags -X` symbol path MUST be the lowercase module path `github.com/priivacy-ai/spec-kitty-analyzer/internal/analyzer` (a wrong path silently no-ops — C-002); injection applied to BOTH the windows `.exe` and non-windows build invocations (C-003); stamping gated on `GITHUB_REF_TYPE == 'tag'` with sentinel fallback for manual dispatch (C-006); `build_date` in UTC ISO-8601 (C-004); `go test ./...` stays green (NFR-001).
 **Scale/Scope**: ~4 source files touched (`internal/analyzer/types.go`, `cmd/spec-kitty-analyzer/main.go`, `internal/query/query.go`, `.github/workflows/release.yml`) + tests + a 0.3.0 breaking-change note.
 
 ## Charter Check
@@ -96,18 +96,22 @@ internal/query/
 - **Sequencing/depends-on**: IC-01
 - **Risks**: Low; keep format stable and greppable.
 
-### IC-04 — Release-time injection
+### IC-04 — Release-time injection (tag-gated)
 
-- **Purpose**: Inject real version (from `GITHUB_REF_NAME`), short commit, and UTC ISO-8601 date via `-ldflags -X` on both the windows and non-windows build invocations.
-- **Relevant requirements**: FR-003; C-001, C-002, C-003, C-004
+- **Purpose**: Inject real version, short commit, and UTC ISO-8601 date via `-ldflags -X` on both the windows and non-windows build invocations — **only when the triggering ref is a tag**; non-tag runs leave the sentinels.
+- **Relevant requirements**: FR-003; C-001, C-002, C-003, C-004, **C-006**
 - **Affected surfaces**: `.github/workflows/release.yml`
 - **Sequencing/depends-on**: IC-01 (symbols must exist)
-- **Risks**: **The lowercase module-path footgun (C-002)** — wrong path fails silently. Both build lines must be updated identically. Verify by grepping the injected output in a dry-run/build check.
+- **Risks**:
+  - **The lowercase module-path footgun (C-002)** — wrong path fails silently. Both build lines must be updated identically. Verify by grepping the injected output.
+  - **Manual-dispatch stamping (C-006, Codex HIGH-1)** — `release.yml` also allows `workflow_dispatch`; `GITHUB_REF_NAME` is then a branch name. Gate the version/commit/date computation on `GITHUB_REF_TYPE == 'tag'` and fall back to sentinels otherwise, or a manual run brands the binary with a branch name (violates INV-2).
 
 ### IC-05 — Breaking-change documentation + tests
 
-- **Purpose**: Document the removed top-level `version` field as a breaking change for the 0.3.0 release, and add unit tests for sentinel defaults + JSON shape.
+- **Purpose**: Document the removed top-level `version` field as a breaking change for the 0.3.0 release, and cover the new behavior with tests.
 - **Relevant requirements**: FR-006; NFR-001, NFR-003
-- **Affected surfaces**: tests under `internal/analyzer/`, `internal/query/`; a 0.3.0 breaking-change note (PR body + release-notes draft in the mission dir — formal `CHANGELOG.md` adoption is deferred to issue #20 to avoid overlap)
+- **Affected surfaces**:
+  - **Tests**: add sentinel-default + JSON-shape tests for all three emitters; **update existing tests that read `Version` directly** — `internal/query/query_test.go` (~L10) and `internal/analyzer/analyzer_test.go` (~L245) will fail to compile once `Version`→`Build` (Codex MEDIUM-3); add a `cmd/spec-kitty-analyzer` test for the `missions` JSON.
+  - **Docs**: a curated `release-notes-0.3.0.md` draft in the mission dir carrying the `.version` → `.build.version` migration note (delivered to the published release via the `--notes-file` swap at release time — Codex HIGH-2); PR-body callout. Formal `CHANGELOG.md` adoption + notes automation is deferred to issue #20.
 - **Sequencing/depends-on**: IC-02, IC-03
-- **Risks**: Tests must assert the *absence* of top-level `version`, not just the presence of `build`, to actually guard the breaking contract.
+- **Risks**: Tests must assert the *absence* of top-level `version`, not just the presence of `build`, to actually guard the breaking contract. Release runbook must use `--notes-file`, not auto-notes, or the warning is dropped.

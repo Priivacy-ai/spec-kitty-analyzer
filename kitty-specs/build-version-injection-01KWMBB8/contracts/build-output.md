@@ -24,7 +24,7 @@ spec-kitty-analyzer dev (commit none, built unknown)
 
 ## JSON: `analyze` report / `query` result / `missions` index
 
-The `build` object appears at the top of each output. The former top-level `version` key is **removed**.
+The `build` object appears **first** in each output (guaranteed by declaring `Build` as the first struct field — R8). The former top-level `version` key is **removed**.
 
 **Before (pre-0.3.0)**
 ```json

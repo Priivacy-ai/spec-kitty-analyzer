@@ -42,4 +42,10 @@ go test ./...   # must stay green (NFR-001)
 
 ## CI verification (release.yml)
 
-After the ldflags change lands, a tagged build's `version` output (and any emitted report) must show the tag-derived version + commit + date. A build-step assertion greps the binary's `version` output and fails if it still reads `dev`.
+After the ldflags change lands:
+- A **tag-triggered** build's `version` output (and any emitted report) must show the tag-derived version + commit + date. A build-step assertion greps the binary's `version` output and fails if it still reads `dev`.
+- A **manual `workflow_dispatch`** run (non-tag ref) must leave the sentinels (`dev`/`none`/`unknown`) — it must NOT stamp the branch name (C-006). Stamping is gated on `GITHUB_REF_TYPE == 'tag'`.
+
+## Release-time note (FR-006)
+
+When cutting 0.3.0, publish the release body from the curated `release-notes-0.3.0.md` (`gh release edit v0.3.0 --notes-file …`) — it carries the `.version` → `.build.version` breaking-change migration. Do NOT rely on the workflow's auto-generated notes, which would omit the warning.
