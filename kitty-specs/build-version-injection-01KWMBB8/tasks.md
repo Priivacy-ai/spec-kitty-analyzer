@@ -71,9 +71,9 @@
 - **Independent test**: draft contains a BREAKING section naming `.version`→`.build.version` with a before/after JSON example consistent with the contract.
 - **Dependencies**: WP01 (documents the realized behavior)
 - **Included subtasks**:
-  - [ ] T012 draft notes: highlights + BREAKING + migration (WP03)
-  - [ ] T013 before/after JSON snippet (WP03)
-  - [ ] T014 accuracy cross-check + `--notes-file` reminder (WP03)
+  - [x] T012 draft notes: highlights + BREAKING + migration (WP03)
+  - [x] T013 before/after JSON snippet (WP03)
+  - [x] T014 accuracy cross-check + `--notes-file` reminder (WP03)
 - **Estimated prompt size**: ~150 lines
 - **Risks**: notes must match the final JSON contract exactly; the 0.3.0 release runbook must use `--notes-file` or the warning is dropped.
 
