@@ -1,0 +1,15 @@
+{
+  "coordination_branch": "kitty/mission-codex-read-output-scoping-01KWMXCQ",
+  "created_at": "2026-07-03T21:15:42.043329+00:00",
+  "flattened": false,
+  "friendly_name": "Codex Read-Output Scoping",
+  "mission_id": "01KWMXCQ2REFA6YRE04P3TP723",
+  "mission_number": null,
+  "mission_slug": "codex-read-output-scoping-01KWMXCQ",
+  "mission_type": "software-dev",
+  "purpose_context": "The analyzer scans codex command output for failure signatures, but codex surfaces file reads and inspections (cat, grep, git diff) as ordinary command output whose content — source, diffs, PR bodies — often contains error-like words, producing false-positive failure detections. This mission teaches the analyzer to recognize codex read/inspection calls and exclude their content from failure scanning while still catching genuine command failures, so failure reports for codex sessions are trustworthy. Closes #13 and finishes the codex payload-type mapping from #11.",
+  "purpose_tldr": "Stop the analyzer from flagging false failures on codex file-read/inspection output that merely contains error-like text.",
+  "slug": "codex-read-output-scoping-01KWMXCQ",
+  "target_branch": "fix/codex-read-output-scoping",
+  "topology": "coord"
+}
