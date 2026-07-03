@@ -201,3 +201,4 @@ This WP is the foundation. WP02 (release-workflow injection) and WP03 (release n
 ## Activity Log
 
 - 2026-07-03T16:58:44Z – claude – shell_pid=96597 – Assigned agent via action command
+- 2026-07-03T17:07:15Z – claude – shell_pid=96597 – WP01 complete: build model + nested-build JSON + version cmd + tests; go build/vet/test green; behavioral acceptance (dev sentinels, injected 0.3.0, JSON build object + no top-level version) verified end-to-end. Includes analysis finding C1 (version-output test).
