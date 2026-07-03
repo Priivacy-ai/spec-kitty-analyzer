@@ -69,7 +69,7 @@ Closes #19 (version from tag, not a drift-prone constant) and #21 (emit commit +
 | C-002 | The linker symbol path must use the actual lowercase module path `github.com/priivacy-ai/spec-kitty-analyzer/internal/analyzer`; an incorrect path silently fails to inject (no error) and must be avoided/verified. | Draft |
 | C-003 | Injection is applied to every release target — both the Windows and the non-Windows build invocations in the release workflow (all six OS/arch packages). | Draft |
 | C-004 | The build date is recorded in UTC ISO-8601 (e.g. `2026-07-03T18:00:00Z`). | Draft |
-| C-005 | This is a breaking change to the JSON output schema. It ships under a version bump with a changelog breaking-change note. Target release: **0.2.1** (maintainer decision; SemVer convention would suggest a minor bump to 0.3.0 — decision recorded per DIRECTIVE_003, justified by a small, known blast radius). | Draft |
+| C-005 | This is a breaking change to the JSON output schema. It ships under a version bump with a changelog breaking-change note. Target release: **0.3.0** — a breaking change to the public JSON output contract warrants a minor bump under SemVer (patch is reserved for backwards-compatible fixes). Decision recorded per DIRECTIVE_003; the small, known consumer set makes the break low-risk to execute now. | Draft |
 
 ## Success Criteria
 
