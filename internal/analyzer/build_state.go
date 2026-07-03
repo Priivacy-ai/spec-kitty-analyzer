@@ -112,6 +112,9 @@ func (s *buildState) absorbTimeline(events []TimelineEvent) {
 			op := s.opFor(event.Scope.InvocationID)
 			op.Files = appendUnique(op.Files, event.SourcePath)
 			op.EventCount++
+			if strings.Contains(filepath.ToSlash(event.SourcePath), "/kitty-ops/") {
+				op.sawOpEvent = true
+			}
 			for _, failure := range event.Failures {
 				op.FailureModes = appendUnique(op.FailureModes, failure.ID)
 			}

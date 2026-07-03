@@ -175,6 +175,11 @@ type OpSummary struct {
 	Files        []string   `json:"files"`
 	FailureModes []string   `json:"failure_modes"`
 	EventCount   int        `json:"event_count"`
+	// sawOpEvent is true when this op is backed by at least one event from a real
+	// kitty-ops/<id>.jsonl op log — not merely synthesized from an invocation_id
+	// mentioned in transcript/prose. It gates open_op_orphan (unexported: not part
+	// of the report schema). See summary.go.
+	sawOpEvent bool
 }
 
 type SpecKittySurface struct {
