@@ -4,8 +4,8 @@ Per FR-037 of the spec-kitty-mission-review skill Gate-4. One row per issue refe
 
 | Issue | Title | Verdict | Evidence ref |
 |-------|-------|---------|--------------|
-| #13 | <fill at WP-implementation time> | unknown | <link or commit> |
-| #11 | <fill at WP-implementation time> | unknown | <link or commit> |
-| #22 | <fill at WP-implementation time> | unknown | <link or commit> |
+| #13 | codex function_call_output read-content scanned as command output (false positives) | in-mission | Fixed across WP01–WP03 (classifier/envelope → gating → prepass); terminal at mission done, proven by WP04 corpus. |
+| #11 | failure-scan follow-ups — remaining codex payload-type mapping | in-mission | Payload-type mapping (FR-006) landed in WP02 (T009); terminal at mission done. |
+| #22 | multi-LLM / per-harness corpus strategy | deferred-with-followup | Explicitly out of scope (spec C-004); planned separately (tracer evidence-engine initiative). |
 
 Valid `Verdict` values: `fixed`, `verified-already-fixed`, `deferred-with-followup`, `in-mission` (being fixed by a later WP in this mission; must reach a terminal verdict before mission `done`).
