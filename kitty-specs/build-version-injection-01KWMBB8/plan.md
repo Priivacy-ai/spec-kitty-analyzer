@@ -112,6 +112,6 @@ internal/query/
 - **Relevant requirements**: FR-006; NFR-001, NFR-003
 - **Affected surfaces**:
   - **Tests**: add sentinel-default + JSON-shape tests for all three emitters; **update existing tests that read `Version` directly** — `internal/query/query_test.go` (~L10) and `internal/analyzer/analyzer_test.go` (~L245) will fail to compile once `Version`→`Build` (Codex MEDIUM-3); add a `cmd/spec-kitty-analyzer` test for the `missions` JSON.
-  - **Docs**: a curated `release-notes-0.3.0.md` draft in the mission dir carrying the `.version` → `.build.version` migration note (delivered to the published release via the `--notes-file` swap at release time — Codex HIGH-2); PR-body callout. Formal `CHANGELOG.md` adoption + notes automation is deferred to issue #20.
+  - **Docs**: a curated `docs/releases/release-notes-0.3.0.md` draft carrying the `.version` → `.build.version` migration note (delivered to the published release via the `--notes-file` swap at release time — Codex HIGH-2); PR-body callout. Formal `CHANGELOG.md` adoption + notes automation is deferred to issue #20.
 - **Sequencing/depends-on**: IC-02, IC-03
 - **Risks**: Tests must assert the *absence* of top-level `version`, not just the presence of `build`, to actually guard the breaking contract. Release runbook must use `--notes-file`, not auto-notes, or the warning is dropped.
