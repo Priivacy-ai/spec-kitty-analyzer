@@ -145,8 +145,8 @@ correctness is already pinned test-first by WP02 (golden matrix) and WP03 (analy
 recorded corpus diff.
 **Prompt**: [tasks/WP04-golden-matrix-corpus.md](./tasks/WP04-golden-matrix-corpus.md)
 
-- [ ] T018 Frozen-corpus diff + committed black-box fixture test over `testdata/codex/` (WP04)
-- [ ] T019 `go test ./...` green; report schema unchanged; behavior documented (C1) (WP04)
+- [x] T018 Frozen-corpus diff + committed black-box fixture test over `testdata/codex/` (WP04)
+- [x] T019 `go test ./...` green; report schema unchanged; behavior documented (C1) (WP04)
 
 **Dependencies**: WP02, WP03. **Risks**: corpus must be representative but frozen (live `~/.codex` ≈
 298 MB, impractical); the fixture test must assert the ABSENCE of read-content findings, not only the
