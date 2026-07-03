@@ -56,10 +56,10 @@
 - **Independent test**: locally simulate (`quickstart.md`) — injected build reports the version; a non-tag build reports `dev`. CI: tag build's `version` output is not `dev`.
 - **Dependencies**: WP01 (the `var` symbols must exist for `-X` to work)
 - **Included subtasks**:
-  - [ ] T008 tag-gated stamping vars (WP02)
-  - [ ] T009 non-windows build line ldflags (WP02)
-  - [ ] T010 windows build line ldflags (WP02)
-  - [ ] T011 post-build verification (WP02)
+  - [x] T008 tag-gated stamping vars (WP02)
+  - [x] T009 non-windows build line ldflags (WP02)
+  - [x] T010 windows build line ldflags (WP02)
+  - [x] T011 post-build verification (WP02)
 - **Estimated prompt size**: ~230 lines
 - **Risks**: the lowercase module-path footgun (C-002, silent no-op); both build lines must match; the tag gate (C-006) must fall back to sentinels for non-tag runs.
 
