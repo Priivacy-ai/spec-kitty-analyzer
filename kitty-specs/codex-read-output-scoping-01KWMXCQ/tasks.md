@@ -85,11 +85,11 @@ defaults (any uncertainty → not-read / not-parseable). No behavior change on i
 `patterns_test.go` (T020).
 **Prompt**: [tasks/WP01-read-classifier-envelope.md](./tasks/WP01-read-classifier-envelope.md)
 
-- [ ] T001 Define `readCommandSet` allowlist + mutating-git denylist (WP01)
-- [ ] T002 `classifyCodexReadCommand(name, cmd)` conservative compound classifier (WP01)
-- [ ] T003 `parseCodexOutputEnvelope(output)` → header/bulk/exitCode/ok (WP01)
-- [ ] T004 Package doc + recall-safe invariants (WP01)
-- [ ] T020 Unit tests (TEST-FIRST) for classifier + envelope in `patterns_test.go` (WP01)
+- [x] T001 Define `readCommandSet` allowlist + mutating-git denylist (WP01)
+- [x] T002 `classifyCodexReadCommand(name, cmd)` conservative compound classifier (WP01)
+- [x] T003 `parseCodexOutputEnvelope(output)` → header/bulk/exitCode/ok (WP01)
+- [x] T004 Package doc + recall-safe invariants (WP01)
+- [x] T020 Unit tests (TEST-FIRST) for classifier + envelope in `patterns_test.go` (WP01)
 
 **Dependencies**: none. **Risks**: over-broad allowlist suppresses real failures — keep minimal;
 `sed`/`awk` excluded (can mutate).
