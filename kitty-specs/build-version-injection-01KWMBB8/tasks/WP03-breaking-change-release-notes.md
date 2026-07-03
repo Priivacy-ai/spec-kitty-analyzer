@@ -17,6 +17,7 @@ subtasks:
 - T014
 phase: Phase 2 - Release integration
 agent: claude
+shell_pid: '10100'
 history:
 - at: '2026-07-03T16:30:00Z'
   actor: system
@@ -110,3 +111,7 @@ Produce the curated release-notes draft at `docs/releases/release-notes-0.3.0.md
 
 - Confirm the JSON examples exactly match the final contract (no drift).
 - Confirm the breaking change is unmissable (its own headed section, not a footnote).
+
+## Activity Log
+
+- 2026-07-03T17:36:02Z – claude – shell_pid=10100 – WP03 complete: docs/releases/release-notes-0.3.0.md with breaking-change section, before/after JSON matching contract, migration + --notes-file reminder.
