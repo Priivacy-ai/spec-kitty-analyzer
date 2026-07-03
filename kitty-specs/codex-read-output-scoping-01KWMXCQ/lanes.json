@@ -11,7 +11,8 @@
         "WP01"
       ],
       "write_scope": [
-        "internal/analyzer/patterns.go"
+        "internal/analyzer/patterns.go",
+        "internal/analyzer/patterns_test.go"
       ],
       "predicted_surfaces": [
         "api"
@@ -25,7 +26,8 @@
         "WP02"
       ],
       "write_scope": [
-        "internal/analyzer/channels.go"
+        "internal/analyzer/channels.go",
+        "internal/analyzer/channels_test.go"
       ],
       "predicted_surfaces": [
         "api"
@@ -41,7 +43,8 @@
         "WP03"
       ],
       "write_scope": [
-        "internal/analyzer/analyzer.go"
+        "internal/analyzer/analyzer.go",
+        "internal/analyzer/analyzer_test.go"
       ],
       "predicted_surfaces": [
         "api",
@@ -60,12 +63,12 @@
         "WP04"
       ],
       "write_scope": [
-        "internal/analyzer/analyzer_test.go",
-        "internal/analyzer/channels_test.go",
+        "internal/analyzer/corpus_codex_test.go",
         "internal/analyzer/testdata/codex/**"
       ],
       "predicted_surfaces": [
-        "api"
+        "api",
+        "tests"
       ],
       "depends_on_lanes": [
         "lane-b",
@@ -74,7 +77,7 @@
       "parallel_group": 3
     }
   ],
-  "computed_at": "2026-07-03T21:44:05.538943+00:00",
+  "computed_at": "2026-07-03T21:59:19.052367+00:00",
   "computed_from": "dependency_graph+ownership",
   "planning_artifact_wps": []
 }

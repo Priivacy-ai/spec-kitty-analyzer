@@ -5,6 +5,7 @@ dependencies: []
 requirement_refs:
 - FR-003
 - FR-004
+- NFR-003
 tracker_refs: []
 planning_base_branch: fix/codex-read-output-scoping
 merge_target_branch: fix/codex-read-output-scoping
@@ -17,6 +18,7 @@ subtasks:
 - T002
 - T003
 - T004
+- T020
 phase: Phase 1 - Foundation
 assignee: ''
 agent: claude
@@ -26,11 +28,13 @@ history:
   action: Prompt generated via /spec-kitty.tasks
 agent_profile: implementer-ivan
 authoritative_surface: internal/analyzer/patterns
-create_intent: []
+create_intent:
+- internal/analyzer/patterns_test.go
 execution_mode: code_change
 model: ''
 owned_files:
 - internal/analyzer/patterns.go
+- internal/analyzer/patterns_test.go
 role: implementer
 tags: []
 task_type: implement
@@ -174,13 +178,25 @@ These functions introduce **no behavior change on their own** — they are consu
   scanning default (`false` / `ok=false`), never to exclusion.* Reference FR-003/FR-004 and C-003.
 - **Files**: `internal/analyzer/patterns.go`.
 
+### Subtask T020 – Unit tests for the classifier + envelope (TEST-FIRST)
+- **Purpose**: Drive T002/T003 test-first per DIRECTIVE_034 + DIRECTIVE_039 (specification-by-example).
+- **Steps**: Create `internal/analyzer/patterns_test.go`. **Author these BEFORE the production code**
+  (red → green): table-driven cases for `classifyCodexReadCommand` and `parseCodexOutputEnvelope`.
+  - Classifier reads (expect true): `git diff`, `rg foo | head`, `rg foo || true`, `cat a b`, `ls -la`,
+    `git show HEAD`, `stat x`. Non-reads (expect false): `git diff && go build`, `cat x > y`,
+    `rg foo && rm bar`, `sed -i s/a/b/ f`, `go build ./...`, empty cmd, unknown tool name.
+  - Envelope: a well-formed exit-0 body → `ok=true`, exit 0, `bulk` = content after `Output:`; a
+    non-zero body → `ok=true`, exitCode!=0, `header` contains the status line; a malformed body (no
+    exit-code line) → `ok=false`; empty/short input → `ok=false`, no panic.
+- **Files**: `internal/analyzer/patterns_test.go`.
+- **Notes**: Run `go test ./internal/analyzer/ -run 'ReadCommand|Envelope'` red first, then implement
+  T001–T003 to green. These are unit tests of pure functions (governed by unit-test rules, not the
+  black-box integration directive).
+
 ## Test Strategy
 
-- WP01 exposes pure functions; the **committed** golden/table tests for them live in WP04
-  (`internal/analyzer/patterns_test.go` or `channels_test.go`) to keep test-file ownership clean.
-- While implementing, you MAY sanity-check with a scratch `go test` locally, but do not commit test
-  files owned by WP04. If you want a fast local loop, write a throwaway `_test.go`, run it, then
-  delete it before finishing (or hand the cases to WP04 in your Activity Log note).
+- **Test-first** (DIRECTIVE_034/039): write `patterns_test.go` (T020) red, then implement to green.
+- Run: `go test ./internal/analyzer/ -run 'ReadCommand|Envelope' -v` then `go test ./internal/analyzer/`.
 
 ## Risks & Mitigations
 

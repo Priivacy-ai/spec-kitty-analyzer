@@ -10,6 +10,8 @@ requirement_refs:
 - FR-005
 - FR-006
 - FR-007
+- NFR-002
+- NFR-003
 tracker_refs: []
 planning_base_branch: fix/codex-read-output-scoping
 merge_target_branch: fix/codex-read-output-scoping
@@ -24,6 +26,8 @@ subtasks:
 - T008
 - T009
 - T010
+- T015
+- T016
 phase: Phase 2 - Channel gating
 assignee: ''
 agent: claude
@@ -38,6 +42,7 @@ execution_mode: code_change
 model: ''
 owned_files:
 - internal/analyzer/channels.go
+- internal/analyzer/channels_test.go
 role: implementer
 tags: []
 task_type: implement
@@ -212,11 +217,39 @@ scanning, while genuine failures still surface. Concretely, in `internal/analyze
 - **Notes**: This is a review/audit subtask plus any small guard needed; it produces the invariant WP04
   asserts.
 
+### Subtask T015 – Golden channel-matrix cases, rows 1–7 (TEST-FIRST)
+- **Purpose**: Lock every routing decision (specification-by-example; DIRECTIVE_034/036/039).
+- **Steps**: In `internal/analyzer/channels_test.go`, add table-driven cases exercising
+  `channelTextPairCtx` with a hand-built `channelContext` (build a `codexCall` with the right `isRead`,
+  as the prepass would). One case per `contracts/channel-matrix.md` row:
+  1. `git diff` (read) + exit-0 diff containing "error"/"exit code 2" → `output` empty, `narrative` empty.
+  2. `cat missing` (read) + exit-1 "No such file" → `output` contains the status header, NOT the bulk.
+  3. `go build ./...` (real) + exit-1 build errors → `output` contains the full output.
+  4. `git diff && go build` (compound) → `output` full (not all-read → scanned).
+  5. `rg foo | head` (read pipeline) + any → `output` empty, `narrative` empty.
+  6. output whose call_id is absent from the registry → `output` full (unknown → scan).
+  7. `callId` camelCase read, exit 0 → excluded.
+- **Files**: `internal/analyzer/channels_test.go`.
+- **Notes**: Author these **before** T007/T008 (red → green). Each case asserts BOTH the presence side
+  (real → scanned) and the ABSENCE side (read → empty). Also keep `diagnosticText ⊇ outputText`.
+
+### Subtask T016 – Payload-type mapping cases (TEST-FIRST)
+- **Purpose**: Pin FR-006 mapping and guard R5 (no regression of already-mapped types).
+- **Steps**: Cases asserting: `function_call` contributes no channel text; `task_started` excluded;
+  `user_message` with prose → `narrative`; empty `payload.type` excluded; and that
+  `reasoning`/`message`/`agent_message`/`task_complete`/`token_count` still route exactly as before
+  (copy representative existing assertions).
+- **Files**: `internal/analyzer/channels_test.go`.
+- **Notes (U1)**: the `user_message` prose field is **unconfirmed**. Before asserting, confirm the
+  actual key from a real codex sample (coordinate with WP04's corpus curation). If no `user_message`
+  event exists in the corpus, make T009 route it to **excluded** (recall-safe) and assert that instead,
+  documenting the deferral — do not ship a guessed narrative field that no test exercises.
+
 ## Test Strategy
 
-- The committed golden channel-matrix cases live in WP04. While implementing, exercise
-  `channelTextPairCtx` with a hand-built `channelContext` locally to confirm rows 1–7, then hand the
-  concrete cases to WP04 (or note them in your Activity Log). Do not commit test files owned by WP04.
+- **Test-first** (DIRECTIVE_034/039): author T015/T016 in `channels_test.go` red, then implement
+  T005–T010 to green. Golden cases mirror `contracts/channel-matrix.md` exactly (specification-by-example).
+- Run: `go test ./internal/analyzer/ -run 'Codex|Channel|ReadOutput' -v` then `go test ./internal/analyzer/`.
 
 ## Risks & Mitigations
 

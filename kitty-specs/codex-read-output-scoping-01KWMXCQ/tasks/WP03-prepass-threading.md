@@ -6,6 +6,7 @@ dependencies:
 - WP02
 requirement_refs:
 - FR-002
+- NFR-001
 tracker_refs: []
 planning_base_branch: fix/codex-read-output-scoping
 merge_target_branch: fix/codex-read-output-scoping
@@ -18,6 +19,7 @@ subtasks:
 - T012
 - T013
 - T014
+- T017
 phase: Phase 3 - Prepass wiring
 assignee: ''
 agent: claude
@@ -32,6 +34,7 @@ execution_mode: code_change
 model: ''
 owned_files:
 - internal/analyzer/analyzer.go
+- internal/analyzer/analyzer_test.go
 role: implementer
 tags: []
 task_type: implement
@@ -155,12 +158,24 @@ tolerant), then thread that context through the per-line event construction so
 - **Notes**: The registry is a local `ctx` — it lives and dies with the `parseFile` call, so file A's
   calls never leak into file B (per-file scope, C-001).
 
+### Subtask T017 – Analyzer integration test: no read-content FP, recall preserved (TEST-FIRST)
+- **Purpose**: Prove the end-to-end behavior through the analyzer's own interface (DIRECTIVE_036
+  black-box: drive the analyzer over an in-memory `.jsonl`, assert on emitted findings).
+- **Steps**: In `internal/analyzer/analyzer_test.go`, build a small two-line codex `.jsonl` — a
+  `function_call` `git diff` + a `function_call_output` exit-0 whose bulk contains "exit code 2" and
+  "merge" — run the analyzer over it and assert **no** `typer_usage_error` / `merge_operation_failed`
+  finding. Add a companion input with a real failing `go build` and assert its failure IS reported
+  (recall). Also add an out-of-order case (the `function_call_output` line before its `function_call`)
+  to prove the prepass tolerates ordering.
+- **Files**: `internal/analyzer/analyzer_test.go`.
+- **Notes**: Author **before** T011–T014 (red → green): on unfixed code the read-content case yields a
+  `typer_usage_error` finding (the bug), so the assertion goes red for the right reason (DIRECTIVE_034).
+
 ## Test Strategy
 
-- The committed analyzer-level integration test (a paired `function_call`(read) +
-  `function_call_output`(exit 0) in one file yields no output-channel finding) is authored in WP04
-  (`internal/analyzer/analyzer_test.go`). While implementing, sanity-check locally, then hand the case
-  to WP04.
+- **Test-first** (DIRECTIVE_034/039): author the T017 analyzer integration test red (it fails on
+  unfixed code because the read content is scanned), then implement T011–T014 to green.
+- Run: `go test ./internal/analyzer/ -run 'Codex|Prepass|ReadOutput' -v` then `go test ./internal/analyzer/`.
 
 ## Risks & Mitigations
 
