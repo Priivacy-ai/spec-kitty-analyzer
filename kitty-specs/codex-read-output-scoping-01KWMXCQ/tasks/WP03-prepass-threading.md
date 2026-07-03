@@ -22,7 +22,8 @@ subtasks:
 - T017
 phase: Phase 3 - Prepass wiring
 assignee: ''
-agent: claude
+agent: "codex"
+shell_pid: "9493"
 history:
 - at: '2026-07-03T21:38:22Z'
   actor: system
@@ -195,3 +196,6 @@ tolerant), then thread that context through the per-line event construction so
 ## Activity Log
 
 - 2026-07-03T21:38:22Z – system – Prompt created.
+- 2026-07-03T23:06:22Z – claude – shell_pid=6857 – Implemented test-first (T017 red->green); Codex review -> APPROVE, no findings. go build/vet/test green.
+- 2026-07-03T23:06:26Z – codex – shell_pid=9493 – Started review via action command
+- 2026-07-03T23:06:36Z – user – shell_pid=9493 – Codex APPROVE, no findings; prepass/threading clean, empty-ctx byte-identical. go build/vet/test green.

@@ -30,7 +30,8 @@ subtasks:
 - T016
 phase: Phase 2 - Channel gating
 assignee: ''
-agent: claude
+agent: "codex"
+shell_pid: "5974"
 history:
 - at: '2026-07-03T21:38:22Z'
   actor: system
@@ -269,3 +270,6 @@ scanning, while genuine failures still surface. Concretely, in `internal/analyze
 ## Activity Log
 
 - 2026-07-03T21:38:22Z – system – Prompt created.
+- 2026-07-03T22:58:02Z – claude – shell_pid=2534 – Implemented test-first; Codex review -> APPROVE-WITH-NITS (nit: +2 FR-005 fallback tests, fixed). go build/vet/test green.
+- 2026-07-03T22:58:15Z – codex – shell_pid=5974 – Started review via action command
+- 2026-07-03T22:59:19Z – user – shell_pid=5974 – Codex review APPROVE-WITH-NITS (test nit fixed). go build/vet/test green.

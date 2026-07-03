@@ -21,8 +21,8 @@ subtasks:
 - T020
 phase: Phase 1 - Foundation
 assignee: ''
-agent: "claude"
-shell_pid: "85733"
+agent: "codex"
+shell_pid: "1346"
 history:
 - at: '2026-07-03T21:38:22Z'
   actor: system
@@ -218,3 +218,6 @@ These functions introduce **no behavior change on their own** — they are consu
 
 - 2026-07-03T21:38:22Z – system – Prompt created.
 - 2026-07-03T22:07:40Z – claude – shell_pid=85733 – Assigned agent via action command
+- 2026-07-03T22:46:12Z – claude – shell_pid=85733 – Implemented test-first; Codex adversarial review 9 rounds -> APPROVE
+- 2026-07-03T22:47:00Z – codex – shell_pid=1346 – Started review via action command
+- 2026-07-03T22:49:10Z – user – shell_pid=1346 – Codex review 9 rounds -> APPROVE; go build/vet/test green
