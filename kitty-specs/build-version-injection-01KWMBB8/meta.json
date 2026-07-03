@@ -1,6 +1,8 @@
 {
+  "accept_commit": "ec7663d2822e5d6ac6cb92244941827360ffe9ad",
   "acceptance_history": [
     {
+      "accept_commit": "ec7663d2822e5d6ac6cb92244941827360ffe9ad",
       "acceptance_mode": "pr",
       "accepted_at": "2026-07-03T19:19:42.588226+00:00",
       "accepted_by": "claude+codex-review",
