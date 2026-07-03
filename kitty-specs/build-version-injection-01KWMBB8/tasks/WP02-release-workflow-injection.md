@@ -21,6 +21,7 @@ subtasks:
 - T011
 phase: Phase 2 - Release integration
 agent: claude
+shell_pid: '8007'
 history:
 - at: '2026-07-03T16:30:00Z'
   actor: system
@@ -146,3 +147,7 @@ Make tagged release builds stamp the real version, commit, and build date into a
 - Verify the `-X` path is the **lowercase** `priivacy-ai` module path — the single highest-risk detail (silent no-op).
 - Verify the tag gate: a `workflow_dispatch` run must NOT stamp a branch name (INV-2 / C-006).
 - Confirm both build lines were updated identically — a common miss.
+
+## Activity Log
+
+- 2026-07-03T17:33:03Z – claude – shell_pid=8007 – WP02 complete: tag-gated ldflags injection, both build lines, footgun guard. YAML valid; gating simulated (tag→stamps, branch→sentinels); -X path proven to resolve in WP01 verification.
