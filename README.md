@@ -126,7 +126,11 @@ The report leads with **governance decisions**:
   `DENY: <reason>` | `DECISION_REQUIRED: <reason>` with exit codes 0 / 1 / 3
   (2 = usage/error). The stdout token is authoritative; the exit code is the
   fallback when a harness recorded no text. **DENY/DECISION reasons** are
-  extracted and shown.
+  extracted and shown. Hooks are recognized both when the transcript command is
+  the go binary directly (`spec-kitty hook run …`) **and** when it is a wrapper
+  (e.g. a dogfood `enrich-hook.py`) that shells out to `spec-kitty-go hook run`
+  and passes its verdict through — the verdict output is a spec-kitty-go
+  signature, so the wrapped decision is still attributed.
 - **Governed-action correlation** — each verdict is linked back through its
   `toolUseID` to the exact tool call it gated, so you see *what* was governed
   (`govern Bash -> DENY :: rm -rf /etc — destructive write outside workspace`).

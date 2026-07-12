@@ -374,8 +374,21 @@ func hookEventFrom(obj map[string]any) (Event, bool) {
 		return Event{}, false
 	}
 	command := asString(att["command"])
-	// Attribute to spec-kitty-go only when the hook command runs its binary.
-	if !isSpecKittyGoHookCommand(command) {
+	content := asString(att["content"])
+	stdout := asString(att["stdout"])
+	var exitCode *int
+	if code, ok := asInt(att["exitCode"]); ok {
+		exitCode = &code
+	}
+	verdict, reason := verdictFrom(content, stdout, hookType, exitCode)
+
+	// Attribute to spec-kitty-go when the hook command runs its binary directly
+	// (`spec-kitty hook run ...`) OR when the hook emitted a spec-kitty-go
+	// governance verdict. The latter covers wrapper hooks (e.g. the dogfood
+	// enrich-hook.py) that shell out to `spec-kitty-go hook run` and pass its
+	// stdout (ADMIT / DENY: ... / DECISION_REQUIRED: ...) through verbatim, so
+	// the transcript's hook command is the wrapper, not the go binary.
+	if !isSpecKittyGoHookCommand(command) && !isGovernanceVerdictOutput(content, stdout) {
 		return Event{}, false
 	}
 	ev := Event{
@@ -384,17 +397,16 @@ func hookEventFrom(obj map[string]any) (Event, bool) {
 		GovernedTool: governedToolFromHookName(asString(att["hookName"]), asString(att["hookEvent"])),
 		ToolUseID:    asString(att["toolUseID"]),
 		Stderr:       strings.TrimSpace(asString(att["stderr"])),
+		ExitCode:     exitCode,
+		Verdict:      verdict,
+		Reason:       reason,
 	}
 	if ev.HookEvent == "" {
 		ev.HookEvent = firstSubmatch(eventFlagRe, command)
 	}
-	if code, ok := asInt(att["exitCode"]); ok {
-		ev.ExitCode = &code
-	}
 	if dur, ok := asInt(att["durationMs"]); ok {
 		ev.DurationMs = &dur
 	}
-	ev.Verdict, ev.Reason = verdictFrom(asString(att["content"]), asString(att["stdout"]), hookType, ev.ExitCode)
 	ev.Adapter = firstSubmatch(adapterRe, command)
 	ev.ContextRef = firstSubmatch(contextRefRe, command)
 	ev.Raw = strings.TrimSpace(command)
@@ -402,12 +414,39 @@ func hookEventFrom(obj map[string]any) (Event, bool) {
 }
 
 // isSpecKittyGoHookCommand reports whether a hook command line runs the go
-// binary's `hook run` surface.
+// binary's `hook run` surface directly.
 func isSpecKittyGoHookCommand(command string) bool {
 	if command == "" {
 		return false
 	}
 	return strings.Contains(command, "spec-kitty") && strings.Contains(command, "hook run")
+}
+
+// isGovernanceVerdictOutput reports whether a hook's captured output is a
+// spec-kitty-go admission verdict, per the `hook run` stdout contract
+// (cmd/spec-kitty/hook.go): a first line of exactly "ADMIT", or beginning
+// "DENY:" / "DECISION_REQUIRED:". This lets a wrapper hook that passes the go
+// binary's stdout through be attributed even though its command name is not the
+// go binary. The match is anchored to the first line so narrative text that
+// merely mentions a verdict word does not qualify.
+func isGovernanceVerdictOutput(content, stdout string) bool {
+	for _, s := range []string{content, stdout} {
+		line := strings.TrimSpace(s)
+		if line == "" {
+			continue
+		}
+		if i := strings.IndexByte(line, '\n'); i >= 0 {
+			line = strings.TrimSpace(line[:i])
+		}
+		up := strings.ToUpper(line)
+		switch {
+		case up == VerdictAdmit, up == VerdictDeny, up == VerdictDecisionRequired:
+			return true
+		case strings.HasPrefix(up, "DENY:"), strings.HasPrefix(up, VerdictDecisionRequired+":"):
+			return true
+		}
+	}
+	return false
 }
 
 // commandStrings pulls command-bearing strings out of a decoded transcript
