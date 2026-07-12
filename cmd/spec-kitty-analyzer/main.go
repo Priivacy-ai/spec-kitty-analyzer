@@ -11,9 +11,11 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/priivacy-ai/spec-kitty-analyzer/internal/analyzer"
 	"github.com/priivacy-ai/spec-kitty-analyzer/internal/discovery"
+	"github.com/priivacy-ai/spec-kitty-analyzer/internal/gogov"
 	missionquery "github.com/priivacy-ai/spec-kitty-analyzer/internal/query"
 	"github.com/priivacy-ai/spec-kitty-analyzer/internal/reports"
 )
@@ -37,6 +39,8 @@ func run(args []string) error {
 		return runQuery(args[1:])
 	case "missions":
 		return runMissions(args[1:])
+	case "go-activity":
+		return runGoActivity(args[1:])
 	case "version", "--version", "-v":
 		fmt.Println("spec-kitty-analyzer " + analyzer.Version)
 		return nil
@@ -156,6 +160,106 @@ func runMissions(args []string) error {
 		Missions: missions,
 	}
 	return writeJSONResult(*out, result)
+}
+
+// runGoActivity scans harness transcripts for evidence of what the
+// spec-kitty-go binary did (governance-hook verdicts + direct verb usage) and
+// reports it. Unlike analyze/query, it is not mission-scoped: spec-kitty-go
+// governs whole agent sessions, so the natural unit is a transcript.
+func runGoActivity(args []string) error {
+	fs := flag.NewFlagSet("go-activity", flag.ContinueOnError)
+	out := fs.String("out", "", "path to write JSON report (default: stdout)")
+	jsonOut := fs.Bool("json", false, "emit JSON instead of the human-readable summary")
+	mission := fs.String("mission", "", "resolve logs for a mission slug from the harness cache")
+	cachePath := fs.String("cache", "", "cache path (default: ~/.spec-kitty-analyzer/cache.json)")
+	cacheBust := fs.Bool("cache-bust", false, "rescan every harness log instead of reusing unchanged cache entries")
+	recentLimit := fs.Int("recent", 10, "when no paths/mission given, scan this many most-recent harness logs")
+	var logRoots multiFlag
+	fs.Var(&logRoots, "log-root", "additional harness log root to scan (repeatable)")
+	if err := fs.Parse(reorderGoActivityArgs(args)); err != nil {
+		return err
+	}
+	positionals := fs.Args()
+
+	var paths []string
+	switch {
+	case len(positionals) > 0:
+		paths = expandLogPaths(positionals)
+	case strings.TrimSpace(*mission) != "":
+		cache, _, err := refreshHarnessCache(*cachePath, logRoots, *cacheBust)
+		if err != nil {
+			return err
+		}
+		paths = discovery.FilesForMission(cache, strings.TrimSpace(*mission))
+		if len(paths) == 0 {
+			return fmt.Errorf("no cached harness logs found for mission %q", *mission)
+		}
+	default:
+		cache, stats, err := refreshHarnessCache(*cachePath, logRoots, *cacheBust)
+		if err != nil {
+			return err
+		}
+		fmt.Fprintln(os.Stderr, discovery.StatsLine(stats))
+		for _, file := range discovery.RecentLogs(cache, *recentLimit, false) {
+			paths = append(paths, file.Path)
+		}
+		if len(paths) == 0 {
+			return errors.New("no harness logs found to scan")
+		}
+	}
+
+	report := gogov.AnalyzeFiles(paths, time.Now())
+	if *jsonOut || *out != "" {
+		if err := writeJSONResult(*out, report); err != nil {
+			return err
+		}
+		if *out != "" {
+			fmt.Fprintf(os.Stderr, "Wrote JSON: %s\n", *out)
+		}
+	}
+	if !*jsonOut {
+		fmt.Print(gogov.RenderText(report))
+	}
+	return nil
+}
+
+// expandLogPaths turns positional file/dir args into a flat list of transcript
+// files, walking directories for supported log extensions.
+func expandLogPaths(inputs []string) []string {
+	var paths []string
+	seen := map[string]bool{}
+	add := func(p string) {
+		if !seen[p] {
+			seen[p] = true
+			paths = append(paths, p)
+		}
+	}
+	for _, in := range inputs {
+		info, err := os.Stat(in)
+		if err != nil {
+			continue
+		}
+		if !info.IsDir() {
+			add(in)
+			continue
+		}
+		_ = filepath.WalkDir(in, func(path string, d os.DirEntry, err error) error {
+			if err != nil || d.IsDir() {
+				return nil
+			}
+			switch strings.ToLower(filepath.Ext(path)) {
+			case ".jsonl", ".json", ".log", ".txt", ".ndjson":
+				add(path)
+			}
+			return nil
+		})
+	}
+	return paths
+}
+
+func reorderGoActivityArgs(args []string) []string {
+	valueFlags := map[string]bool{"--out": true, "--mission": true, "--cache": true, "--recent": true, "--log-root": true}
+	return reorderArgs(args, valueFlags)
 }
 
 func runAnalyze(args []string) error {
@@ -418,6 +522,7 @@ Commands:
   analyze [paths...]      Analyze explicit files/directories directly.
   query <mission-slug>    Emit filtered mission JSON for agents and scripts.
   missions                Emit cached mission index JSON.
+  go-activity [paths...]  Report what spec-kitty-go did (governance verdicts + CLI verbs).
   version                 Print version.
 
 Analyze examples:
@@ -430,5 +535,10 @@ Analyze examples:
 Query examples:
   spec-kitty-analyzer query task-workflow-bug-fixes-01KV69BZ --include timeline,signals --failure-id branch_worktree_confusion
   spec-kitty-analyzer query task-workflow-bug-fixes-01KV69BZ --command merge --include failures,timeline
-  spec-kitty-analyzer missions --limit 20`)
+  spec-kitty-analyzer missions --limit 20
+
+spec-kitty-go activity examples:
+  spec-kitty-analyzer go-activity                      Scan recent harness logs for spec-kitty-go behavior.
+  spec-kitty-analyzer go-activity /path/to/session.jsonl --json
+  spec-kitty-analyzer go-activity --mission my-mission-slug`)
 }
