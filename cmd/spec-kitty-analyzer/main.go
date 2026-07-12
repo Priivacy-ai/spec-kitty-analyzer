@@ -68,7 +68,7 @@ func runQuery(args []string) error {
 	var scopes multiFlag
 	var contains multiFlag
 	fs.Var(&logRoots, "log-root", "additional harness log root to scan (repeatable)")
-	fs.Var(&include, "include", "result sections: all,inputs,missions,ops,findings,timeline,signals,surface (repeatable or comma-separated)")
+	fs.Var(&include, "include", "result sections: all,inputs,missions,ops,findings,timeline,signals,surface,go (repeatable or comma-separated)")
 	fs.Var(&failureIDs, "failure-id", "filter timeline/findings to failure ID/title (repeatable or comma-separated)")
 	fs.Var(&commands, "command", "filter timeline to slash/CLI command, verb, mission, WP, agent, or profile (repeatable or comma-separated)")
 	fs.Var(&skills, "skill", "filter timeline to skill name/path (repeatable or comma-separated)")
@@ -117,6 +117,10 @@ func runQuery(args []string) error {
 		Limit:      *limit,
 	})
 	result.Cache = cacheInfo
+	if missionquery.WantsSpecKittyGo(include) {
+		goReport := gogov.AnalyzeFiles(reportPaths, time.Now())
+		result.SpecKittyGo = &goReport
+	}
 	return writeJSONResult(*out, result)
 }
 
@@ -339,7 +343,28 @@ func runAnalyze(args []string) error {
 		fmt.Printf("Wrote PDF: %s\n", pdfPath)
 	}
 	fmt.Printf("Timeline events: %d, missions: %d, ops: %d, failure modes: %d\n", report.Summary.TimelineEvents, report.Summary.Missions, report.Summary.Ops, report.Summary.FailureModes)
+	if len(reportPaths) > 0 {
+		g := gogov.AnalyzeFiles(reportPaths, time.Now()).Summary
+		if g.GovernedActions > 0 || g.CLIInvocations > 0 {
+			fmt.Printf("spec-kitty-go: %d governed actions (%s), %d CLI invocations; run `go-activity` for detail\n",
+				g.GovernedActions, goVerdictBrief(g), g.CLIInvocations)
+		}
+	}
 	return nil
+}
+
+// goVerdictBrief renders a compact "ADMIT=3, DENY=1" style verdict summary.
+func goVerdictBrief(s gogov.Summary) string {
+	parts := make([]string, 0, 4)
+	for _, v := range []string{"ADMIT", "DENY", "DECISION_REQUIRED", "ERROR"} {
+		if n := s.Verdicts[v]; n > 0 {
+			parts = append(parts, fmt.Sprintf("%s=%d", v, n))
+		}
+	}
+	if len(parts) == 0 {
+		return "no verdicts"
+	}
+	return strings.Join(parts, ", ")
 }
 
 func refreshHarnessCache(cachePath string, roots multiFlag, force bool) (*discovery.MissionCache, discovery.ScanStats, error) {

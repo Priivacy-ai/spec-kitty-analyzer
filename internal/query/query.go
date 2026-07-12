@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/priivacy-ai/spec-kitty-analyzer/internal/analyzer"
+	"github.com/priivacy-ai/spec-kitty-analyzer/internal/gogov"
 	"github.com/priivacy-ai/spec-kitty-analyzer/internal/reports"
 )
 
@@ -36,6 +37,7 @@ type Result struct {
 	Timeline       []analyzer.TimelineEvent      `json:"timeline,omitempty"`
 	Signals        *Signals                      `json:"signals,omitempty"`
 	Surface        *analyzer.SpecKittySurface    `json:"spec_kitty_surface,omitempty"`
+	SpecKittyGo    *gogov.Report                 `json:"spec_kitty_go,omitempty"`
 	Notes          []string                      `json:"notes,omitempty"`
 }
 
@@ -224,6 +226,15 @@ func includeSet(items []string) map[string]bool {
 		out[item] = true
 	}
 	return out
+}
+
+// WantsSpecKittyGo reports whether the caller asked for the spec-kitty-go
+// activity section (`--include go`, or `--include all`). The section is
+// computed by the caller (it needs the raw log files, not just the analyzer
+// report) and attached to Result.SpecKittyGo.
+func WantsSpecKittyGo(include []string) bool {
+	set := includeSet(normalizeList(include))
+	return set["all"] || set["go"] || set["spec-kitty-go"] || set["speckittygo"]
 }
 
 func filterTimeline(events []analyzer.TimelineEvent, opts Options) []analyzer.TimelineEvent {

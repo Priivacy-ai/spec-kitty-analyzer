@@ -24,6 +24,7 @@ func RenderText(rep Report) string {
 		fmt.Fprintf(&b, "  verdicts:       %s\n", formatCounts(s.Verdicts, verdictOrder))
 		fmt.Fprintf(&b, "  governed tools: %s\n", formatCounts(s.GovernedTools, nil))
 		fmt.Fprintf(&b, "  hook events:    %s\n", formatCounts(s.HookEvents, nil))
+		fmt.Fprintf(&b, "  pre/post pair:  %d Pre, %d Post, %d fully paired\n", s.PreToolHooks, s.PostToolHooks, s.PrePostPaired)
 		if len(s.Adapters) > 0 {
 			fmt.Fprintf(&b, "  adapters:       %s\n", formatCounts(s.Adapters, nil))
 		}
@@ -36,9 +37,23 @@ func RenderText(rep Report) string {
 		}
 		if s.Denials+s.DecisionsNeeded+s.Errors > 0 {
 			fmt.Fprintf(&b, "  attention:      %d denied, %d decision-required, %d errored\n", s.Denials, s.DecisionsNeeded, s.Errors)
+			for _, reason := range s.Reasons {
+				fmt.Fprintf(&b, "                  reason: %s\n", reason)
+			}
 		} else {
 			b.WriteString("  attention:      none (all governed actions admitted cleanly)\n")
 		}
+	}
+	b.WriteString("\n")
+
+	// Ledger -- what the governance decisions committed.
+	fmt.Fprintf(&b, "Ledger: %d admission decision(s) durably recorded", s.Ledger.AdmissionDecisionsRecorded)
+	if s.Ledger.Derived {
+		b.WriteString(" (derived from the hook contract; ledger.db is out-of-band)")
+	}
+	b.WriteString("\n")
+	if s.Ledger.LedgerCLIOps > 0 || s.Ledger.SealOps > 0 {
+		fmt.Fprintf(&b, "  observed CLI:   %d ledger op(s), %d seal op(s)\n", s.Ledger.LedgerCLIOps, s.Ledger.SealOps)
 	}
 	b.WriteString("\n")
 
@@ -77,6 +92,12 @@ func renderEventLine(ev Event) string {
 		}
 		if ev.HookEvent != "" {
 			detail += " [" + ev.HookEvent + "]"
+		}
+		if ev.GovernedInput != "" {
+			detail += " :: " + truncate(ev.GovernedInput, 70)
+		}
+		if ev.Reason != "" {
+			detail += " — " + truncate(ev.Reason, 70)
 		}
 		if ev.Stderr != "" {
 			detail += " stderr=" + truncate(ev.Stderr, 60)
