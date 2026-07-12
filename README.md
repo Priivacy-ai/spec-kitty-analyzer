@@ -139,12 +139,14 @@ The report leads with **governance decisions**:
   transcript), so the count is reported as **derived**, alongside any *observed*
   `spec-kitty ledger`/`seal` CLI operations.
 
-It then lists direct CLI verb usage and a timeline. Direct-CLI attribution is
-conservative: distinctive go verbs
-(`hook/space/ledger/seal/governance/composition/review`) and the go-only
-`witness-sidecar` are always attributed, while verbs the Python CLI shares
-(`config/version/charter/init`) count only when invoked via an unambiguous
-go-build path (`bin/spec-kitty`, `cmd/spec-kitty`, `go run ./cmd/spec-kitty`).
+It then lists direct CLI verb usage and a timeline. Attribution is pinned to
+spec-kitty-go's actual top-level verb surface — `hook | review | space | ledger
+| config | version` (guarded by its own `verb_surface_doc_test.go`). Direct-CLI
+attribution is conservative: distinctive go verbs (`hook/review/space/ledger`,
+with `ledger` subcommands `list/show/tail/verify/seal`) and the go-only
+`witness-sidecar` are always attributed, while verbs the Python CLI could share
+(`config/version`) count only when invoked via an unambiguous go-build path
+(`bin/spec-kitty`, `cmd/spec-kitty`, `go run ./cmd/spec-kitty`).
 
 The same view is woven into the agent-facing `query` command as a
 `spec_kitty_go` section (`--include go`, or `all`), and `analyze` prints a

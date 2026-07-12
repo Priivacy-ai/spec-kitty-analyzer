@@ -133,13 +133,19 @@ func TestAcceptGoInvocation_VerbGating(t *testing.T) {
 		prefix, binary, verb string
 		want                 bool
 	}{
-		{"", "spec-kitty", "hook", true},                 // distinctive verb, bare ok
-		{"", "spec-kitty", "ledger", true},               // distinctive verb, bare ok
-		{"", "spec-kitty", "specify", false},             // python verb, reject
-		{"", "spec-kitty", "dispatch", false},            // python verb, reject
-		{"", "spec-kitty", "config", false},              // ambiguous, no path prefix -> reject
-		{"/tmp/bin/", "spec-kitty", "config", true},      // ambiguous, path-prefixed -> accept
-		{"./cmd/", "spec-kitty", "version", true},        // ambiguous, cmd-prefixed -> accept
+		{"", "spec-kitty", "hook", true},                   // distinctive top-level verb, bare ok
+		{"", "spec-kitty", "ledger", true},                 // distinctive top-level verb, bare ok
+		{"", "spec-kitty", "review", true},                 // distinctive top-level verb, bare ok
+		{"", "spec-kitty", "space", true},                  // distinctive top-level verb, bare ok
+		{"", "spec-kitty", "specify", false},               // python verb, reject
+		{"", "spec-kitty", "dispatch", false},              // python verb, reject
+		{"", "spec-kitty", "seal", false},                  // NOT a top-level verb (it is `ledger seal`)
+		{"", "spec-kitty", "governance", false},            // not in the pinned verb surface
+		{"", "spec-kitty", "charter", false},               // python-only; not a go top-level verb
+		{"", "spec-kitty", "init", false},                  // python-only; not a go top-level verb
+		{"", "spec-kitty", "config", false},                // ambiguous, no path prefix -> reject
+		{"/tmp/bin/", "spec-kitty", "config", true},        // ambiguous, path-prefixed -> accept
+		{"./cmd/", "spec-kitty", "version", true},          // ambiguous, cmd-prefixed -> accept
 		{"", "witness-sidecar", "verify-provenance", true}, // go-only binary, always
 	}
 	for _, c := range cases {

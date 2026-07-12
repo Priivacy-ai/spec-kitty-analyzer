@@ -151,26 +151,28 @@ type Report struct {
 	Notes       []string  `json:"notes,omitempty"`
 }
 
-// distinctiveGoVerbs are go-only verbs: safe to attribute to spec-kitty-go even
-// when the binary token is bare `spec-kitty` (the Python CLI shares the binary
-// name but not these verbs; it uses dispatch/next/specify/plan/tasks/...).
+// The spec-kitty-go top-level verb surface is exactly
+// {hook, review, space, ledger, config, version} — pinned by
+// spec-kitty-go's own cmd/spec-kitty/verb_surface_doc_test.go (issue #650).
+// These sets are kept aligned to that pinned surface; if the go test reds on a
+// new/renamed verb, update these to match.
+
+// distinctiveGoVerbs are go-only top-level verbs: safe to attribute to
+// spec-kitty-go even when the binary token is bare `spec-kitty` (the Python CLI
+// shares the binary name but not these verbs; it uses dispatch/next/specify/...).
 var distinctiveGoVerbs = map[string]bool{
-	"hook":        true,
-	"space":       true,
-	"ledger":      true,
-	"seal":        true,
-	"governance":  true,
-	"composition": true,
-	"review":      true,
+	"hook":   true,
+	"review": true,
+	"space":  true,
+	"ledger": true,
 }
 
-// ambiguousGoVerbs are accepted only when the binary is clearly the go build
+// ambiguousGoVerbs are real go verbs whose names the Python CLI could plausibly
+// share, so they are accepted only when the binary is clearly the go build
 // (path-prefixed bin/spec-kitty, cmd/spec-kitty, or `go run ./cmd/spec-kitty`).
 var ambiguousGoVerbs = map[string]bool{
 	"config":  true,
 	"version": true,
-	"charter": true,
-	"init":    true,
 }
 
 // goSubcommands lists the known second-level verbs per top-level verb. A token
@@ -178,15 +180,15 @@ var ambiguousGoVerbs = map[string]bool{
 // otherwise it is a positional argument (a filename, project name, etc.) and is
 // left off the aggregation key. This keeps rollups clean
 // (`witness-sidecar verify-provenance`, not `... verify-provenance att`) while
-// the full command text is still preserved on each event's Raw field.
+// the full command text is still preserved on each event's Raw field. The
+// ledger set matches cmd/spec-kitty/ledger.go's shipped subcommands
+// (list|show|tail|verify|seal).
 var goSubcommands = map[string]map[string]bool{
-	"hook":       {"run": true},
-	"ledger":     {"verify": true, "append": true, "list": true, "show": true, "export": true},
-	"space":      {"admit": true, "list": true, "show": true},
-	"review":     {"evaluate": true, "accept": true},
-	"config":     {"get": true, "set": true, "list": true, "show": true},
-	"governance": {"status": true, "show": true},
-	"charter":    {"status": true, "sync": true, "context": true},
+	"hook":   {"run": true},
+	"ledger": {"list": true, "show": true, "tail": true, "verify": true, "seal": true},
+	"space":  {"admit": true, "list": true, "show": true, "conflicts": true},
+	"review": {"evaluate": true, "accept": true},
+	"config": {"get": true, "set": true, "list": true, "show": true},
 }
 
 // goCLIRe matches an invocation of the spec-kitty-go binary surface inside a
@@ -650,12 +652,10 @@ func buildSummary(events []Event, filesScanned, filesWith int) Summary {
 				key += " " + ev.Subcommand
 			}
 			s.CLIVerbs[strings.TrimSpace(key)]++
-			if ev.Binary == "spec-kitty" {
-				switch ev.Verb {
-				case "ledger":
-					s.Ledger.LedgerCLIOps++
-				case "seal":
-					s.Ledger.SealOps++
+			if ev.Binary == "spec-kitty" && ev.Verb == "ledger" {
+				s.Ledger.LedgerCLIOps++
+				if ev.Subcommand == "seal" {
+					s.Ledger.SealOps++ // `spec-kitty ledger seal`
 				}
 			}
 		}
