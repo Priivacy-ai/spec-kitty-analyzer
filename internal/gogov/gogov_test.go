@@ -20,7 +20,7 @@ const fixture = `{"type":"assistant","timestamp":"2026-07-12T09:51:39.000Z","mes
 {"type":"attachment","timestamp":"2026-07-12T09:51:45.000Z","attachment":{"type":"hook_success","hookName":"PostToolUse:Read","toolUseID":"toolu_read1","hookEvent":"PostToolUse","content":"ADMIT","stdout":"ADMIT\n","exitCode":0,"command":"/tmp/work/bin/spec-kitty hook run --adapter claude-code --event PostToolUse --governance-context-ref ctx/dogfood/x","durationMs":8}}
 {"type":"assistant","timestamp":"2026-07-12T09:52:00.000Z","message":{"role":"assistant","content":[{"type":"tool_use","name":"Bash","input":{"command":"go run ./cmd/spec-kitty ledger verify && witness-sidecar verify-provenance att.json"}}]}}
 {"type":"assistant","timestamp":"2026-07-12T09:52:10.000Z","message":{"role":"assistant","content":[{"type":"text","text":"I could run spec-kitty ledger verify but I will not."}]}}
-{"type":"attachment","timestamp":"2026-07-12T09:52:20.000Z","attachment":{"type":"hook_success","hookName":"PreToolUse:Read","hookEvent":"PreToolUse","content":"ADMIT","command":"/usr/bin/some-other-tool check"}}
+{"type":"attachment","timestamp":"2026-07-12T09:52:20.000Z","attachment":{"type":"hook_success","hookName":"PreToolUse:Read","hookEvent":"PreToolUse","content":"lint ok","command":"/usr/bin/some-other-tool check"}}
 `
 
 func writeFixture(t *testing.T) string {
@@ -125,6 +125,48 @@ func TestAnalyzeFiles_CLIDetection(t *testing.T) {
 	}
 	if s.CLIVerbs["witness-sidecar verify-provenance"] != 1 {
 		t.Fatalf("missing witness-sidecar: %+v", s.CLIVerbs)
+	}
+}
+
+// TestWrapperHookDetection covers the DOG-GOV-03 shape: a wrapper hook
+// (enrich-hook.py) whose transcript command is NOT the go binary, but whose
+// stdout is spec-kitty-go's verdict passed through. It must still be attributed;
+// a plain non-governance hook must not.
+func TestWrapperHookDetection(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "wrapped.jsonl")
+	lines := `{"type":"assistant","timestamp":"2026-07-12T13:40:00.000Z","message":{"role":"assistant","content":[{"type":"tool_use","id":"toolu_w","name":"Write","input":{"file_path":"/home/specuser/dog-gov-03/MAIN_RELEASE.txt"}}]}}
+{"type":"attachment","timestamp":"2026-07-12T13:40:01.000Z","attachment":{"type":"hook_error","hookName":"PreToolUse:Write","toolUseID":"toolu_w","hookEvent":"PreToolUse","content":"DECISION_REQUIRED: high-risk signed intent requires decision review","stdout":"DECISION_REQUIRED: high-risk signed intent requires decision review\n","exitCode":3,"command":"python3 /home/specuser/dog-gov-03/enrich-hook.py","durationMs":22}}
+{"type":"attachment","timestamp":"2026-07-12T13:40:05.000Z","attachment":{"type":"hook_success","hookName":"PreToolUse:Bash","hookEvent":"PreToolUse","content":"formatted 3 files","stdout":"formatted 3 files\n","exitCode":0,"command":"python3 /some/prettier-hook.py"}}
+`
+	if err := os.WriteFile(path, []byte(lines), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	rep := AnalyzeFiles([]string{path}, time.Unix(0, 0).UTC())
+	if rep.Summary.GovernedActions != 1 {
+		t.Fatalf("governed actions = %d, want 1 (wrapper verdict in, unrelated hook out)", rep.Summary.GovernedActions)
+	}
+	e := rep.Events[0]
+	if e.Verdict != VerdictDecisionRequired || e.Reason != "high-risk signed intent requires decision review" {
+		t.Fatalf("wrapper verdict/reason wrong: verdict=%q reason=%q", e.Verdict, e.Reason)
+	}
+	if e.GovernedTool != "Write" || e.GovernedInput != "/home/specuser/dog-gov-03/MAIN_RELEASE.txt" {
+		t.Fatalf("wrapper correlation wrong: tool=%q input=%q", e.GovernedTool, e.GovernedInput)
+	}
+}
+
+func TestIsGovernanceVerdictOutput(t *testing.T) {
+	yes := []string{"ADMIT", "ADMIT\n", "DENY: nope", "DECISION_REQUIRED: ask a human", "deny: lower ok"}
+	no := []string{"", "formatted 3 files", "I would ADMIT this normally", "all good, no deny here"}
+	for _, s := range yes {
+		if !isGovernanceVerdictOutput(s, "") {
+			t.Errorf("expected %q to be a governance verdict", s)
+		}
+	}
+	for _, s := range no {
+		if isGovernanceVerdictOutput(s, "") {
+			t.Errorf("expected %q NOT to be a governance verdict", s)
+		}
 	}
 }
 
