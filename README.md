@@ -89,6 +89,47 @@ JSON path. Use `--json-only` for structured output only.
 (Running from source instead of an install? Replace `spec-kitty-analyzer` with
 `go run ./cmd/spec-kitty-analyzer` in any command above.)
 
+## spec-kitty-go activity (`go-activity`)
+
+> **Experimental branch feature.** This reports what the **spec-kitty-go**
+> binary (the governed-operation platform rewrite) actually *did* during agent
+> sessions — a different surface from the Python Spec Kitty the rest of this
+> tool detects.
+
+spec-kitty-go wires into a harness as a governance hook: each governed tool call
+runs `spec-kitty hook run --adapter <harness> --event PreToolUse …` and returns
+one of `ADMIT | DENY | DECISION_REQUIRED` before any side effect. In a Claude
+Code transcript that decision is recorded as a `hook` attachment — a shape the
+main analyzer pipeline deliberately ignores. `go-activity` reads those
+attachments (plus direct invocations of the go binary's own verb surface —
+`hook/review/space/ledger/seal/governance/config` and `witness-sidecar`) and
+rolls them up:
+
+```bash
+# Scan the most recent harness logs
+spec-kitty-analyzer go-activity
+
+# Analyze one session transcript (human summary)
+spec-kitty-analyzer go-activity /path/to/session.jsonl
+
+# Structured JSON for scripts/agents
+spec-kitty-analyzer go-activity /path/to/session.jsonl --json
+
+# Resolve logs by mission slug from the harness cache
+spec-kitty-analyzer go-activity --mission my-mission-slug
+```
+
+The report leads with **governance decisions**: verdict breakdown
+(ADMIT/DENY/DECISION_REQUIRED/ERROR), which tools were governed, hook-hot-path
+latency (min/p50/p95/max — spec-kitty-go's core claim), the adapter and
+`--governance-context-ref` in play, and anything needing attention (denials,
+decisions-required, errored hooks). It then lists direct CLI verb usage and a
+timeline. Direct-CLI attribution is conservative: distinctive go verbs
+(`hook/space/ledger/seal/governance/composition/review`) and the go-only
+`witness-sidecar` are always attributed, while verbs the Python CLI shares
+(`config/version/charter/init`) count only when invoked via an unambiguous
+go-build path (`bin/spec-kitty`, `cmd/spec-kitty`, `go run ./cmd/spec-kitty`).
+
 ## Agent JSON API
 
 Agents and scripts should prefer `query`, which emits filtered JSON. The
