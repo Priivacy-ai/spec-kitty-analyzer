@@ -73,6 +73,8 @@ type Event struct {
 	Reason        string `json:"reason,omitempty"`         // DENY/DECISION_REQUIRED summary (text after the verdict token)
 	ToolUseID     string `json:"tool_use_id,omitempty"`    // links this decision to the governed tool call
 	GovernedInput string `json:"governed_input,omitempty"` // what that tool call was about to do (e.g. the Bash command)
+	Executed      *bool  `json:"executed,omitempty"`       // did the governed tool run? (a tool_result exists for its id)
+	NotEnforced   bool   `json:"not_enforced,omitempty"`   // a DENY/DECISION_REQUIRED verdict whose operation still executed
 	DurationMs    *int   `json:"duration_ms,omitempty"`
 	ExitCode      *int   `json:"exit_code,omitempty"`
 	Adapter       string `json:"adapter,omitempty"`     // claude-code | opencode | ...
@@ -99,28 +101,29 @@ type LatencyStats struct {
 
 // Summary is the rolled-up view of spec-kitty-go behavior.
 type Summary struct {
-	GovernedActions  int            `json:"governed_actions"`
-	Verdicts         map[string]int `json:"verdicts"`
-	GovernedTools    map[string]int `json:"governed_tools"`
-	HookEvents       map[string]int `json:"hook_events"`
-	Adapters         map[string]int `json:"adapters,omitempty"`
-	ContextRefs      []string       `json:"context_refs,omitempty"`
-	Latency          LatencyStats   `json:"latency_ms"`
-	Denials          int            `json:"denials"`
-	DecisionsNeeded  int            `json:"decisions_required"`
-	Errors           int            `json:"errors"`
-	Reasons          []string       `json:"deny_decision_reasons,omitempty"` // distinct DENY/DECISION reasons
-	PreToolHooks     int            `json:"pre_tool_hooks"`
-	PostToolHooks    int            `json:"post_tool_hooks"`
-	PrePostPaired    int            `json:"pre_post_paired"` // governed tool calls seen with both a Pre and Post hook
-	CLIInvocations   int            `json:"cli_invocations"`
-	CLIVerbs         map[string]int `json:"cli_verbs,omitempty"`
-	Binaries         map[string]int `json:"binaries,omitempty"`
-	Ledger           LedgerActivity `json:"ledger"`
-	FilesScanned     int            `json:"files_scanned"`
-	FilesWithGoUsage int            `json:"files_with_go_activity"`
-	FirstSeen        *time.Time     `json:"first_seen,omitempty"`
-	LastSeen         *time.Time     `json:"last_seen,omitempty"`
+	GovernedActions    int            `json:"governed_actions"`
+	Verdicts           map[string]int `json:"verdicts"`
+	GovernedTools      map[string]int `json:"governed_tools"`
+	HookEvents         map[string]int `json:"hook_events"`
+	Adapters           map[string]int `json:"adapters,omitempty"`
+	ContextRefs        []string       `json:"context_refs,omitempty"`
+	Latency            LatencyStats   `json:"latency_ms"`
+	Denials            int            `json:"denials"`
+	DecisionsNeeded    int            `json:"decisions_required"`
+	Errors             int            `json:"errors"`
+	UnenforcedVerdicts int            `json:"unenforced_verdicts"`             // DENY/DECISION_REQUIRED whose governed op still executed
+	Reasons            []string       `json:"deny_decision_reasons,omitempty"` // distinct DENY/DECISION reasons
+	PreToolHooks       int            `json:"pre_tool_hooks"`
+	PostToolHooks      int            `json:"post_tool_hooks"`
+	PrePostPaired      int            `json:"pre_post_paired"` // governed tool calls seen with both a Pre and Post hook
+	CLIInvocations     int            `json:"cli_invocations"`
+	CLIVerbs           map[string]int `json:"cli_verbs,omitempty"`
+	Binaries           map[string]int `json:"binaries,omitempty"`
+	Ledger             LedgerActivity `json:"ledger"`
+	FilesScanned       int            `json:"files_scanned"`
+	FilesWithGoUsage   int            `json:"files_with_go_activity"`
+	FirstSeen          *time.Time     `json:"first_seen,omitempty"`
+	LastSeen           *time.Time     `json:"last_seen,omitempty"`
 }
 
 // LedgerActivity summarizes what reached spec-kitty-go's tamper-evident ledger.
@@ -275,11 +278,22 @@ func extractFromFile(path string) []Event {
 				hook.SourcePath = path
 				hook.Line = lineNo
 				hook.Timestamp = ts
-				if ref, found := toolUses[hook.ToolUseID]; found {
+				if ref, found := toolUses[hook.ToolUseID]; found && ref != nil {
 					if hook.GovernedTool == "" {
 						hook.GovernedTool = ref.name
 					}
 					hook.GovernedInput = ref.summary
+					if ref.executed {
+						executed := true
+						hook.Executed = &executed
+					}
+				}
+				// A non-ADMIT verdict whose governed operation still ran was not
+				// enforced by the harness (spec-kitty-go's exit 1/3 is treated as
+				// non-blocking; only exit 2 blocks a Claude Code tool).
+				if (hook.Verdict == VerdictDeny || hook.Verdict == VerdictDecisionRequired) &&
+					hook.Executed != nil && *hook.Executed {
+					hook.NotEnforced = true
 				}
 				events = append(events, hook)
 			}
@@ -304,14 +318,29 @@ func extractFromFile(path string) []Event {
 }
 
 type toolRef struct {
-	name    string
-	summary string
+	name      string
+	summary   string
+	executed  bool // a tool_result was recorded for this id -> the governed tool actually ran
+	execError bool // that tool_result carried is_error:true
 }
 
-// indexToolUses scans transcript lines for tool_use blocks and returns a map
-// from tool-use id to a short description of what that tool call was doing.
-func indexToolUses(lines []string) map[string]toolRef {
-	index := map[string]toolRef{}
+// indexToolUses scans transcript lines for tool_use and tool_result blocks and
+// returns a map from tool-use id to what that tool call was doing AND whether it
+// ultimately executed. Execution is the key signal for enforcement: a
+// PreToolUse hook that truly blocks a tool produces no tool_result, so a
+// DENY/DECISION_REQUIRED verdict whose id still has a tool_result was not
+// enforced by the harness. ("tool_use_id" contains the substring "tool_use", so
+// the cheap prefilter below keeps tool_result lines too.)
+func indexToolUses(lines []string) map[string]*toolRef {
+	index := map[string]*toolRef{}
+	get := func(id string) *toolRef {
+		if r := index[id]; r != nil {
+			return r
+		}
+		r := &toolRef{}
+		index[id] = r
+		return r
+	}
 	for _, rawLine := range lines {
 		line := strings.TrimSpace(rawLine)
 		if line == "" || !strings.Contains(line, "tool_use") {
@@ -331,16 +360,26 @@ func indexToolUses(lines []string) map[string]toolRef {
 		}
 		for _, item := range content {
 			block, ok := item.(map[string]any)
-			if !ok || asString(block["type"]) != "tool_use" {
+			if !ok {
 				continue
 			}
-			id := asString(block["id"])
-			if id == "" {
-				continue
+			switch asString(block["type"]) {
+			case "tool_use":
+				if id := asString(block["id"]); id != "" {
+					input, _ := block["input"].(map[string]any)
+					r := get(id)
+					r.name = asString(block["name"])
+					r.summary = summarizeToolInput(r.name, input)
+				}
+			case "tool_result":
+				if id := asString(block["tool_use_id"]); id != "" {
+					r := get(id)
+					r.executed = true
+					if e, ok := block["is_error"].(bool); ok && e {
+						r.execError = true
+					}
+				}
 			}
-			name := asString(block["name"])
-			input, _ := block["input"].(map[string]any)
-			index[id] = toolRef{name: name, summary: summarizeToolInput(name, input)}
 		}
 	}
 	return index
@@ -680,6 +719,9 @@ func buildSummary(events []Event, filesScanned, filesWith int) Summary {
 				s.DecisionsNeeded++
 			case VerdictError:
 				s.Errors++
+			}
+			if ev.NotEnforced {
+				s.UnenforcedVerdicts++
 			}
 		case CategoryCLI:
 			s.CLIInvocations++

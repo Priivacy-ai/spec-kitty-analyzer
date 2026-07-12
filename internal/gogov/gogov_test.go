@@ -155,6 +155,47 @@ func TestWrapperHookDetection(t *testing.T) {
 	}
 }
 
+// TestVerdictNotEnforced models the DOG-GOV-03 finding: spec-kitty-go returns
+// DENY/DECISION_REQUIRED (exit 1/3), the harness treats it as non-blocking, and
+// the governed tool_use still produces a tool_result (executes). That pairing —
+// non-ADMIT verdict + a tool_result for the same id — is the enforcement gap.
+func TestVerdictNotEnforced(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "notenforced.jsonl")
+	lines := `{"type":"assistant","timestamp":"2026-07-12T11:57:44.000Z","message":{"role":"assistant","content":[{"type":"tool_use","id":"toolu_write","name":"Write","input":{"file_path":"/home/x/MAIN_RELEASE.txt"}}]}}
+{"type":"attachment","timestamp":"2026-07-12T11:57:45.000Z","attachment":{"type":"hook_error","hookName":"PreToolUse:Write","toolUseID":"toolu_write","hookEvent":"PreToolUse","content":"DECISION_REQUIRED: high-risk signed intent requires decision review","stdout":"DECISION_REQUIRED: high-risk signed intent requires decision review\n","exitCode":3,"command":"python3 /x/enrich-hook.py"}}
+{"type":"user","timestamp":"2026-07-12T11:57:46.000Z","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"toolu_write","content":"File created successfully at: /home/x/MAIN_RELEASE.txt"}]}}
+{"type":"assistant","timestamp":"2026-07-12T11:57:50.000Z","message":{"role":"assistant","content":[{"type":"tool_use","id":"toolu_deny","name":"Bash","input":{"command":"git push origin main"}}]}}
+{"type":"attachment","timestamp":"2026-07-12T11:57:51.000Z","attachment":{"type":"hook_error","hookName":"PreToolUse:Bash","toolUseID":"toolu_deny","hookEvent":"PreToolUse","content":"DENY: shell/exec forbidden under review","stdout":"DENY: shell/exec forbidden under review\n","exitCode":1,"command":"python3 /x/enrich-hook.py"}}
+{"type":"assistant","timestamp":"2026-07-12T11:57:55.000Z","message":{"role":"assistant","content":[{"type":"tool_use","id":"toolu_blocked","name":"Bash","input":{"command":"rm -rf /"}}]}}
+{"type":"attachment","timestamp":"2026-07-12T11:57:56.000Z","attachment":{"type":"hook_error","hookName":"PreToolUse:Bash","toolUseID":"toolu_blocked","hookEvent":"PreToolUse","content":"DENY: catastrophic","stdout":"DENY: catastrophic\n","exitCode":1,"command":"python3 /x/enrich-hook.py"}}
+`
+	if err := os.WriteFile(path, []byte(lines), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	rep := AnalyzeFiles([]string{path}, time.Unix(0, 0).UTC())
+
+	// toolu_deny has NO tool_result (blocked/never ran); toolu_write and the
+	// push do -- but only toolu_write and... wait: only toolu_write has a result
+	// here. The two DENYs differ: neither has a result in this fixture except we
+	// gave toolu_write (a DECISION) a result. Assert precisely.
+	if rep.Summary.UnenforcedVerdicts != 1 {
+		t.Fatalf("unenforced verdicts = %d, want 1 (only the executed DECISION_REQUIRED)", rep.Summary.UnenforcedVerdicts)
+	}
+	var decision *Event
+	for i := range rep.Events {
+		if rep.Events[i].ToolUseID == "toolu_write" {
+			decision = &rep.Events[i]
+		}
+		if rep.Events[i].ToolUseID == "toolu_blocked" && rep.Events[i].NotEnforced {
+			t.Fatalf("toolu_blocked has no tool_result; must NOT be flagged not-enforced")
+		}
+	}
+	if decision == nil || !decision.NotEnforced || decision.Executed == nil || !*decision.Executed {
+		t.Fatalf("executed DECISION_REQUIRED not flagged not-enforced: %+v", decision)
+	}
+}
+
 func TestIsGovernanceVerdictOutput(t *testing.T) {
 	yes := []string{"ADMIT", "ADMIT\n", "DENY: nope", "DECISION_REQUIRED: ask a human", "deny: lower ok"}
 	no := []string{"", "formatted 3 files", "I would ADMIT this normally", "all good, no deny here"}
