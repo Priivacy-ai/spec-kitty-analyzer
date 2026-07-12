@@ -44,6 +44,20 @@ func RenderText(rep Report) string {
 			b.WriteString("  attention:      none (all governed actions admitted cleanly)\n")
 		}
 	}
+
+	// Enforcement gap — the headline risk: a DENY/DECISION_REQUIRED verdict whose
+	// governed operation still executed.
+	if s.UnenforcedVerdicts > 0 {
+		fmt.Fprintf(&b, "  !! NOT ENFORCED: %d non-ADMIT verdict(s) whose governed operation STILL EXECUTED:\n", s.UnenforcedVerdicts)
+		for _, ev := range rep.Events {
+			if !ev.NotEnforced {
+				continue
+			}
+			fmt.Fprintf(&b, "       %-17s %-6s %s\n", ev.Verdict, ev.GovernedTool, truncate(ev.GovernedInput, 80))
+		}
+		b.WriteString("     (spec-kitty-go returned exit 1/3, which Claude Code treats as non-blocking — only exit 2 blocks a tool.\n")
+		b.WriteString("      In auto-mode this is an enforcement gap; in interactive mode a DECISION_REQUIRED may reflect human approval.)\n")
+	}
 	b.WriteString("\n")
 
 	// Ledger -- what the governance decisions committed.
@@ -95,6 +109,9 @@ func renderEventLine(ev Event) string {
 		}
 		if ev.GovernedInput != "" {
 			detail += " :: " + truncate(ev.GovernedInput, 70)
+		}
+		if ev.NotEnforced {
+			detail += "  !!NOT-ENFORCED(executed)"
 		}
 		if ev.Reason != "" {
 			detail += " — " + truncate(ev.Reason, 70)
