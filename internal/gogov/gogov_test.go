@@ -8,10 +8,16 @@ import (
 )
 
 // fixture models a realistic Claude Code transcript in which spec-kitty-go is
-// wired as a PreToolUse governance hook and also invoked directly at the CLI.
-const fixture = `{"type":"attachment","timestamp":"2026-07-12T09:51:39.772Z","attachment":{"type":"hook_success","hookName":"PreToolUse:Read","hookEvent":"PreToolUse","content":"ADMIT","stdout":"ADMIT\n","stderr":"","exitCode":0,"command":"/tmp/work/bin/spec-kitty hook run --adapter claude-code --event PreToolUse --governance-context-ref ctx/dogfood/x","durationMs":49}}
-{"type":"attachment","timestamp":"2026-07-12T09:51:42.000Z","attachment":{"type":"hook_success","hookName":"PreToolUse:Bash","hookEvent":"PreToolUse","content":"DENY","stdout":"DENY\n","stderr":"","exitCode":0,"command":"/tmp/work/bin/spec-kitty hook run --adapter claude-code --event PreToolUse --governance-context-ref ctx/dogfood/x","durationMs":31}}
-{"type":"attachment","timestamp":"2026-07-12T09:51:44.000Z","attachment":{"type":"hook_error","hookName":"PreToolUse:Bash","hookEvent":"PreToolUse","content":"","stdout":"","stderr":"panic: boom","exitCode":2,"command":"/tmp/work/bin/spec-kitty hook run --adapter claude-code --event PreToolUse","durationMs":12}}
+// wired as a governance hook and also invoked directly at the CLI. Verdict
+// shapes follow the real `hook run` contract (cmd/spec-kitty/hook.go):
+// "ADMIT" (exit 0), "DENY: <summary>" (exit 1), "DECISION_REQUIRED: <summary>"
+// (exit 3). The tool_use blocks carry ids the hook attachments reference.
+const fixture = `{"type":"assistant","timestamp":"2026-07-12T09:51:39.000Z","message":{"role":"assistant","content":[{"type":"tool_use","id":"toolu_read1","name":"Read","input":{"file_path":"/tmp/work/README.md"}}]}}
+{"type":"attachment","timestamp":"2026-07-12T09:51:39.772Z","attachment":{"type":"hook_success","hookName":"PreToolUse:Read","toolUseID":"toolu_read1","hookEvent":"PreToolUse","content":"ADMIT","stdout":"ADMIT\n","stderr":"","exitCode":0,"command":"/tmp/work/bin/spec-kitty hook run --adapter claude-code --event PreToolUse --governance-context-ref ctx/dogfood/x","durationMs":49}}
+{"type":"assistant","timestamp":"2026-07-12T09:51:41.000Z","message":{"role":"assistant","content":[{"type":"tool_use","id":"toolu_bash1","name":"Bash","input":{"command":"rm -rf /etc"}}]}}
+{"type":"attachment","timestamp":"2026-07-12T09:51:42.000Z","attachment":{"type":"hook_error","hookName":"PreToolUse:Bash","toolUseID":"toolu_bash1","hookEvent":"PreToolUse","content":"DENY: destructive write outside workspace","stdout":"DENY: destructive write outside workspace\n","stderr":"","exitCode":1,"command":"/tmp/work/bin/spec-kitty hook run --adapter claude-code --event PreToolUse --governance-context-ref ctx/dogfood/x","durationMs":31}}
+{"type":"attachment","timestamp":"2026-07-12T09:51:44.000Z","attachment":{"type":"hook_error","hookName":"PreToolUse:Bash","toolUseID":"toolu_bash2","hookEvent":"PreToolUse","content":"DECISION_REQUIRED: write to protected branch main","stdout":"DECISION_REQUIRED: write to protected branch main\n","stderr":"","exitCode":3,"command":"/tmp/work/bin/spec-kitty hook run --adapter claude-code --event PreToolUse --governance-context-ref ctx/dogfood/x","durationMs":12}}
+{"type":"attachment","timestamp":"2026-07-12T09:51:45.000Z","attachment":{"type":"hook_success","hookName":"PostToolUse:Read","toolUseID":"toolu_read1","hookEvent":"PostToolUse","content":"ADMIT","stdout":"ADMIT\n","exitCode":0,"command":"/tmp/work/bin/spec-kitty hook run --adapter claude-code --event PostToolUse --governance-context-ref ctx/dogfood/x","durationMs":8}}
 {"type":"assistant","timestamp":"2026-07-12T09:52:00.000Z","message":{"role":"assistant","content":[{"type":"tool_use","name":"Bash","input":{"command":"go run ./cmd/spec-kitty ledger verify && witness-sidecar verify-provenance att.json"}}]}}
 {"type":"assistant","timestamp":"2026-07-12T09:52:10.000Z","message":{"role":"assistant","content":[{"type":"text","text":"I could run spec-kitty ledger verify but I will not."}]}}
 {"type":"attachment","timestamp":"2026-07-12T09:52:20.000Z","attachment":{"type":"hook_success","hookName":"PreToolUse:Read","hookEvent":"PreToolUse","content":"ADMIT","command":"/usr/bin/some-other-tool check"}}
@@ -32,27 +38,75 @@ func TestAnalyzeFiles_GovernanceHooks(t *testing.T) {
 	rep := AnalyzeFiles([]string{path}, time.Unix(0, 0).UTC())
 	s := rep.Summary
 
-	if s.GovernedActions != 3 {
-		t.Fatalf("governed actions = %d, want 3 (the some-other-tool hook must be excluded)", s.GovernedActions)
+	// 4 spec-kitty-go hooks; the some-other-tool hook must be excluded.
+	if s.GovernedActions != 4 {
+		t.Fatalf("governed actions = %d, want 4 (the some-other-tool hook must be excluded)", s.GovernedActions)
 	}
-	if s.Verdicts[VerdictAdmit] != 1 || s.Verdicts[VerdictDeny] != 1 || s.Verdicts[VerdictError] != 1 {
+	if s.Verdicts[VerdictAdmit] != 2 || s.Verdicts[VerdictDeny] != 1 || s.Verdicts[VerdictDecisionRequired] != 1 {
 		t.Fatalf("verdict breakdown wrong: %+v", s.Verdicts)
 	}
-	if s.Denials != 1 || s.Errors != 1 {
-		t.Fatalf("denials=%d errors=%d, want 1 and 1", s.Denials, s.Errors)
+	if s.Denials != 1 || s.DecisionsNeeded != 1 || s.Errors != 0 {
+		t.Fatalf("denials=%d decisions=%d errors=%d, want 1,1,0", s.Denials, s.DecisionsNeeded, s.Errors)
 	}
-	if s.GovernedTools["Bash"] != 2 || s.GovernedTools["Read"] != 1 {
+	if s.GovernedTools["Bash"] != 2 || s.GovernedTools["Read"] != 2 {
 		t.Fatalf("governed tools wrong: %+v", s.GovernedTools)
 	}
-	if s.Adapters["claude-code"] != 3 {
+	if s.Adapters["claude-code"] != 4 {
 		t.Fatalf("adapters wrong: %+v", s.Adapters)
 	}
 	if len(s.ContextRefs) != 1 || s.ContextRefs[0] != "ctx/dogfood/x" {
 		t.Fatalf("context refs wrong: %+v", s.ContextRefs)
 	}
-	// Latency over the three hooks (49, 31, 12).
-	if s.Latency.Count != 3 || s.Latency.MinMs != 12 || s.Latency.MaxMs != 49 {
+	// Latency over the four hooks (49, 31, 12, 8).
+	if s.Latency.Count != 4 || s.Latency.MinMs != 8 || s.Latency.MaxMs != 49 {
 		t.Fatalf("latency wrong: %+v", s.Latency)
+	}
+}
+
+func TestAnalyzeFiles_DenyAndDecisionReasons(t *testing.T) {
+	path := writeFixture(t)
+	rep := AnalyzeFiles([]string{path}, time.Unix(0, 0).UTC())
+
+	if len(rep.Summary.Reasons) != 2 {
+		t.Fatalf("reasons = %v, want 2 distinct", rep.Summary.Reasons)
+	}
+	var deny, decision *Event
+	for i := range rep.Events {
+		switch rep.Events[i].Verdict {
+		case VerdictDeny:
+			deny = &rep.Events[i]
+		case VerdictDecisionRequired:
+			decision = &rep.Events[i]
+		}
+	}
+	if deny == nil || deny.Reason != "destructive write outside workspace" {
+		t.Fatalf("deny reason not extracted: %+v", deny)
+	}
+	if decision == nil || decision.Reason != "write to protected branch main" {
+		t.Fatalf("decision reason not extracted: %+v", decision)
+	}
+	// The DENY decision links to the exact governed Bash command.
+	if deny.GovernedInput != "rm -rf /etc" {
+		t.Fatalf("deny governed input not correlated: %q", deny.GovernedInput)
+	}
+}
+
+func TestAnalyzeFiles_PrePostAndLedger(t *testing.T) {
+	path := writeFixture(t)
+	s := AnalyzeFiles([]string{path}, time.Unix(0, 0).UTC()).Summary
+
+	if s.PreToolHooks != 3 || s.PostToolHooks != 1 {
+		t.Fatalf("pre/post counts wrong: pre=%d post=%d", s.PreToolHooks, s.PostToolHooks)
+	}
+	// toolu_read1 has both a Pre and a Post hook -> one fully paired action.
+	if s.PrePostPaired != 1 {
+		t.Fatalf("pre/post paired = %d, want 1", s.PrePostPaired)
+	}
+	if !s.Ledger.Derived || s.Ledger.AdmissionDecisionsRecorded != 4 {
+		t.Fatalf("ledger derived accounting wrong: %+v", s.Ledger)
+	}
+	if s.Ledger.LedgerCLIOps != 1 {
+		t.Fatalf("ledger CLI ops = %d, want 1 (spec-kitty ledger verify)", s.Ledger.LedgerCLIOps)
 	}
 }
 
@@ -96,23 +150,26 @@ func TestAcceptGoInvocation_VerbGating(t *testing.T) {
 }
 
 func TestVerdictFrom(t *testing.T) {
-	two := 2
-	zero := 0
+	i := func(n int) *int { return &n }
 	cases := []struct {
+		name                      string
 		content, stdout, hookType string
 		exit                      *int
-		want                      string
+		wantVerdict, wantReason   string
 	}{
-		{"ADMIT", "ADMIT\n", "hook_success", &zero, VerdictAdmit},
-		{"DENY", "DENY\n", "hook_success", &zero, VerdictDeny},
-		{"DECISION_REQUIRED", "", "hook_success", &zero, VerdictDecisionRequired},
-		{"", "", "hook_error", &two, VerdictError},
-		{"", "", "hook_success", &two, VerdictError}, // non-zero exit still errors
-		{"", "", "hook_success", &zero, VerdictUnknown},
+		{"admit token", "ADMIT", "ADMIT\n", "hook_success", i(0), VerdictAdmit, ""},
+		{"deny token+reason", "DENY: bad path", "DENY: bad path\n", "hook_error", i(1), VerdictDeny, "bad path"},
+		{"decision token+reason", "DECISION_REQUIRED: protected branch", "", "hook_error", i(3), VerdictDecisionRequired, "protected branch"},
+		// exit-code fallback when a harness recorded no textual content:
+		{"deny by exit 1", "", "", "hook_error", i(1), VerdictDeny, ""},
+		{"decision by exit 3", "", "", "hook_error", i(3), VerdictDecisionRequired, ""},
+		{"usage error exit 2", "", "", "hook_error", i(2), VerdictError, ""},
+		{"clean exit no token", "", "", "hook_success", i(0), VerdictUnknown, ""},
 	}
 	for _, c := range cases {
-		if got := verdictFrom(c.content, c.stdout, c.hookType, c.exit); got != c.want {
-			t.Errorf("verdictFrom(%q,%q,%q) = %q, want %q", c.content, c.stdout, c.hookType, got, c.want)
+		gotVerdict, gotReason := verdictFrom(c.content, c.stdout, c.hookType, c.exit)
+		if gotVerdict != c.wantVerdict || gotReason != c.wantReason {
+			t.Errorf("%s: verdictFrom = (%q,%q), want (%q,%q)", c.name, gotVerdict, gotReason, c.wantVerdict, c.wantReason)
 		}
 	}
 }

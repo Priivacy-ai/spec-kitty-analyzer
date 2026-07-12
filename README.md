@@ -119,16 +119,40 @@ spec-kitty-analyzer go-activity /path/to/session.jsonl --json
 spec-kitty-analyzer go-activity --mission my-mission-slug
 ```
 
-The report leads with **governance decisions**: verdict breakdown
-(ADMIT/DENY/DECISION_REQUIRED/ERROR), which tools were governed, hook-hot-path
-latency (min/p50/p95/max — spec-kitty-go's core claim), the adapter and
-`--governance-context-ref` in play, and anything needing attention (denials,
-decisions-required, errored hooks). It then lists direct CLI verb usage and a
-timeline. Direct-CLI attribution is conservative: distinctive go verbs
+The report leads with **governance decisions**:
+
+- **Verdict breakdown** — ADMIT / DENY / DECISION_REQUIRED / ERROR. Verdicts
+  follow spec-kitty-go's exact `hook run` contract: stdout `ADMIT` |
+  `DENY: <reason>` | `DECISION_REQUIRED: <reason>` with exit codes 0 / 1 / 3
+  (2 = usage/error). The stdout token is authoritative; the exit code is the
+  fallback when a harness recorded no text. **DENY/DECISION reasons** are
+  extracted and shown.
+- **Governed-action correlation** — each verdict is linked back through its
+  `toolUseID` to the exact tool call it gated, so you see *what* was governed
+  (`govern Bash -> DENY :: rm -rf /etc — destructive write outside workspace`).
+- **Pre/Post pairing** — counts of `PreToolUse` vs `PostToolUse` hooks and how
+  many governed calls were seen with both.
+- **Hook-hot-path latency** — min/p50/p95/max (spec-kitty-go's core claim).
+- **Ledger accounting** — per the hook contract each admission durably appends
+  `OperationRequested → OperationClassified → GovernanceContextResolved →
+  AdmissionDecision` to `ledger.db`. That store is out-of-band (not in the
+  transcript), so the count is reported as **derived**, alongside any *observed*
+  `spec-kitty ledger`/`seal` CLI operations.
+
+It then lists direct CLI verb usage and a timeline. Direct-CLI attribution is
+conservative: distinctive go verbs
 (`hook/space/ledger/seal/governance/composition/review`) and the go-only
 `witness-sidecar` are always attributed, while verbs the Python CLI shares
 (`config/version/charter/init`) count only when invoked via an unambiguous
 go-build path (`bin/spec-kitty`, `cmd/spec-kitty`, `go run ./cmd/spec-kitty`).
+
+The same view is woven into the agent-facing `query` command as a
+`spec_kitty_go` section (`--include go`, or `all`), and `analyze` prints a
+one-line spec-kitty-go governance summary next to its mission stats:
+
+```bash
+spec-kitty-analyzer query my-mission-slug --include timeline,signals,go
+```
 
 ## Agent JSON API
 

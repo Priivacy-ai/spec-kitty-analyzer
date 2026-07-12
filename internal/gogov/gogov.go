@@ -67,14 +67,17 @@ type Event struct {
 	Category   string     `json:"category"` // hook | cli
 
 	// Hook (governance decision) fields.
-	HookEvent    string `json:"hook_event,omitempty"`    // PreToolUse | PostToolUse | ...
-	GovernedTool string `json:"governed_tool,omitempty"` // Read | Bash | Edit | ...
-	Verdict      string `json:"verdict,omitempty"`       // ADMIT | DENY | DECISION_REQUIRED | ERROR | UNKNOWN
-	DurationMs   *int   `json:"duration_ms,omitempty"`
-	ExitCode     *int   `json:"exit_code,omitempty"`
-	Adapter      string `json:"adapter,omitempty"`     // claude-code | opencode | ...
-	ContextRef   string `json:"context_ref,omitempty"` // --governance-context-ref value
-	Stderr       string `json:"stderr,omitempty"`
+	HookEvent     string `json:"hook_event,omitempty"`     // PreToolUse | PostToolUse | ...
+	GovernedTool  string `json:"governed_tool,omitempty"`  // Read | Bash | Edit | ...
+	Verdict       string `json:"verdict,omitempty"`        // ADMIT | DENY | DECISION_REQUIRED | ERROR | UNKNOWN
+	Reason        string `json:"reason,omitempty"`         // DENY/DECISION_REQUIRED summary (text after the verdict token)
+	ToolUseID     string `json:"tool_use_id,omitempty"`    // links this decision to the governed tool call
+	GovernedInput string `json:"governed_input,omitempty"` // what that tool call was about to do (e.g. the Bash command)
+	DurationMs    *int   `json:"duration_ms,omitempty"`
+	ExitCode      *int   `json:"exit_code,omitempty"`
+	Adapter       string `json:"adapter,omitempty"`     // claude-code | opencode | ...
+	ContextRef    string `json:"context_ref,omitempty"` // --governance-context-ref value
+	Stderr        string `json:"stderr,omitempty"`
 
 	// CLI (verb-surface) fields.
 	Binary     string `json:"binary,omitempty"`     // spec-kitty | witness-sidecar
@@ -106,13 +109,35 @@ type Summary struct {
 	Denials          int            `json:"denials"`
 	DecisionsNeeded  int            `json:"decisions_required"`
 	Errors           int            `json:"errors"`
+	Reasons          []string       `json:"deny_decision_reasons,omitempty"` // distinct DENY/DECISION reasons
+	PreToolHooks     int            `json:"pre_tool_hooks"`
+	PostToolHooks    int            `json:"post_tool_hooks"`
+	PrePostPaired    int            `json:"pre_post_paired"` // governed tool calls seen with both a Pre and Post hook
 	CLIInvocations   int            `json:"cli_invocations"`
 	CLIVerbs         map[string]int `json:"cli_verbs,omitempty"`
 	Binaries         map[string]int `json:"binaries,omitempty"`
+	Ledger           LedgerActivity `json:"ledger"`
 	FilesScanned     int            `json:"files_scanned"`
 	FilesWithGoUsage int            `json:"files_with_go_activity"`
 	FirstSeen        *time.Time     `json:"first_seen,omitempty"`
 	LastSeen         *time.Time     `json:"last_seen,omitempty"`
+}
+
+// LedgerActivity summarizes what reached spec-kitty-go's tamper-evident ledger.
+//
+// The ledger lives out-of-band in ledger.db (`.kittify/`), not in the harness
+// transcript, so this reports two things: OBSERVED ledger/seal CLI operations
+// in the logs, plus the DERIVED count of admission-decision appends that the
+// hook contract guarantees. Per cmd/spec-kitty/hook.go, every governed
+// admission durably appends OperationRequested, OperationClassified,
+// GovernanceContextResolved and the final AdmissionDecision to ledger.db before
+// the verdict is returned -- so each governance decision here corresponds to a
+// recorded ledger decision, even though the record itself is not in the log.
+type LedgerActivity struct {
+	AdmissionDecisionsRecorded int  `json:"admission_decisions_recorded"` // derived: one per governance decision
+	LedgerCLIOps               int  `json:"ledger_cli_ops"`               // observed: `spec-kitty ledger ...`
+	SealOps                    int  `json:"seal_ops"`                     // observed: `spec-kitty seal` / auto-seal CLI
+	Derived                    bool `json:"derived"`                      // true: appends are inferred from the hook contract, not read from ledger.db
 }
 
 // Report is the top-level result of an activity scan.
@@ -226,10 +251,17 @@ func extractFromFile(path string) []Event {
 		data = data[:maxInputFileBytes]
 	}
 	scrubbed, _ := analyzer.Scrub(data)
+	lines := strings.Split(string(scrubbed), "\n")
+
+	// Pass 1: index every tool_use block by its id so a hook attachment can be
+	// linked to the exact tool call it governed (the attachment carries only the
+	// toolUseID, not the tool's name/input).
+	toolUses := indexToolUses(lines)
+
+	// Pass 2: extract governance decisions and CLI invocations.
 	var events []Event
-	lineNo := 0
-	for _, rawLine := range strings.Split(string(scrubbed), "\n") {
-		lineNo++
+	for i, rawLine := range lines {
+		lineNo := i + 1
 		line := strings.TrimSpace(rawLine)
 		if line == "" {
 			continue
@@ -241,6 +273,12 @@ func extractFromFile(path string) []Event {
 				hook.SourcePath = path
 				hook.Line = lineNo
 				hook.Timestamp = ts
+				if ref, found := toolUses[hook.ToolUseID]; found {
+					if hook.GovernedTool == "" {
+						hook.GovernedTool = ref.name
+					}
+					hook.GovernedInput = ref.summary
+				}
 				events = append(events, hook)
 			}
 			for _, cmd := range commandStrings(obj) {
@@ -261,6 +299,62 @@ func extractFromFile(path string) []Event {
 		}
 	}
 	return events
+}
+
+type toolRef struct {
+	name    string
+	summary string
+}
+
+// indexToolUses scans transcript lines for tool_use blocks and returns a map
+// from tool-use id to a short description of what that tool call was doing.
+func indexToolUses(lines []string) map[string]toolRef {
+	index := map[string]toolRef{}
+	for _, rawLine := range lines {
+		line := strings.TrimSpace(rawLine)
+		if line == "" || !strings.Contains(line, "tool_use") {
+			continue
+		}
+		var obj map[string]any
+		if json.Unmarshal([]byte(line), &obj) != nil {
+			continue
+		}
+		m, ok := obj["message"].(map[string]any)
+		if !ok {
+			continue
+		}
+		content, ok := m["content"].([]any)
+		if !ok {
+			continue
+		}
+		for _, item := range content {
+			block, ok := item.(map[string]any)
+			if !ok || asString(block["type"]) != "tool_use" {
+				continue
+			}
+			id := asString(block["id"])
+			if id == "" {
+				continue
+			}
+			name := asString(block["name"])
+			input, _ := block["input"].(map[string]any)
+			index[id] = toolRef{name: name, summary: summarizeToolInput(name, input)}
+		}
+	}
+	return index
+}
+
+// summarizeToolInput renders a one-line description of a governed tool call.
+func summarizeToolInput(name string, input map[string]any) string {
+	if input == nil {
+		return ""
+	}
+	for _, key := range []string{"command", "file_path", "path", "pattern", "url", "prompt"} {
+		if v := asString(input[key]); v != "" {
+			return truncate(v, 120)
+		}
+	}
+	return ""
 }
 
 // hookEventFrom recognizes a Claude Code hook attachment that carries a
@@ -286,6 +380,7 @@ func hookEventFrom(obj map[string]any) (Event, bool) {
 		Category:     CategoryHook,
 		HookEvent:    asString(att["hookEvent"]),
 		GovernedTool: governedToolFromHookName(asString(att["hookName"]), asString(att["hookEvent"])),
+		ToolUseID:    asString(att["toolUseID"]),
 		Stderr:       strings.TrimSpace(asString(att["stderr"])),
 	}
 	if ev.HookEvent == "" {
@@ -297,7 +392,7 @@ func hookEventFrom(obj map[string]any) (Event, bool) {
 	if dur, ok := asInt(att["durationMs"]); ok {
 		ev.DurationMs = &dur
 	}
-	ev.Verdict = verdictFrom(asString(att["content"]), asString(att["stdout"]), hookType, ev.ExitCode)
+	ev.Verdict, ev.Reason = verdictFrom(asString(att["content"]), asString(att["stdout"]), hookType, ev.ExitCode)
 	ev.Adapter = firstSubmatch(adapterRe, command)
 	ev.ContextRef = firstSubmatch(contextRefRe, command)
 	ev.Raw = strings.TrimSpace(command)
@@ -416,29 +511,55 @@ func governedToolFromHookName(hookName, hookEvent string) string {
 	return hookName
 }
 
-// verdictFrom derives the governance verdict from the hook's content/stdout,
-// falling back to the attachment type and exit code for failure cases.
-func verdictFrom(content, stdout, hookType string, exitCode *int) string {
-	text := strings.ToUpper(strings.TrimSpace(content))
-	if text == "" {
-		text = strings.ToUpper(strings.TrimSpace(stdout))
+// verdictFrom derives the governance verdict and its human reason from a hook's
+// output. It follows spec-kitty-go's exact `hook run` contract
+// (cmd/spec-kitty/hook.go): stdout is "ADMIT" | "DENY: <summary>" |
+// "DECISION_REQUIRED: <summary>", and the exit code is ADMIT=0, DENY=1,
+// usage/error=2, DECISION_REQUIRED=3. The stdout token is authoritative; the
+// exit code is the fallback when a harness recorded no textual content.
+func verdictFrom(content, stdout, hookType string, exitCode *int) (verdict, reason string) {
+	raw := strings.TrimSpace(content)
+	if raw == "" {
+		raw = strings.TrimSpace(stdout)
 	}
+	upper := strings.ToUpper(raw)
 	switch {
-	case strings.Contains(text, VerdictDecisionRequired):
-		return VerdictDecisionRequired
-	case strings.Contains(text, VerdictDeny):
-		return VerdictDeny
-	case strings.Contains(text, VerdictAdmit):
-		return VerdictAdmit
+	case strings.Contains(upper, VerdictDecisionRequired):
+		return VerdictDecisionRequired, reasonAfterToken(raw, VerdictDecisionRequired)
+	case strings.Contains(upper, VerdictDeny):
+		return VerdictDeny, reasonAfterToken(raw, VerdictDeny)
+	case strings.Contains(upper, VerdictAdmit):
+		return VerdictAdmit, ""
 	}
-	lt := strings.ToLower(hookType)
-	if strings.Contains(lt, "error") || strings.Contains(lt, "block") {
-		return VerdictError
+	// No verdict token: fall back to the exit-code contract.
+	if exitCode != nil {
+		switch *exitCode {
+		case 0:
+			return VerdictUnknown, ""
+		case 1:
+			return VerdictDeny, ""
+		case 3:
+			return VerdictDecisionRequired, ""
+		default: // 2 (usage/error) or any other non-zero
+			return VerdictError, ""
+		}
 	}
-	if exitCode != nil && *exitCode != 0 {
-		return VerdictError
+	if lt := strings.ToLower(hookType); strings.Contains(lt, "error") || strings.Contains(lt, "block") {
+		return VerdictError, ""
 	}
-	return VerdictUnknown
+	return VerdictUnknown, ""
+}
+
+// reasonAfterToken returns the "<summary>" in "DENY: <summary>" (case- and
+// spacing-tolerant); "" when the verdict carried no trailing reason.
+func reasonAfterToken(raw, token string) string {
+	idx := strings.Index(strings.ToUpper(raw), token)
+	if idx < 0 {
+		return ""
+	}
+	rest := raw[idx+len(token):]
+	rest = strings.TrimLeft(rest, ": \t")
+	return strings.TrimSpace(rest)
 }
 
 func buildSummary(events []Event, filesScanned, filesWith int) Summary {
@@ -453,6 +574,10 @@ func buildSummary(events []Event, filesScanned, filesWith int) Summary {
 		FilesWithGoUsage: filesWith,
 	}
 	refs := map[string]bool{}
+	reasonSeen := map[string]bool{}
+	// track Pre/Post hooks per governed tool-use id for pairing.
+	type prePost struct{ pre, post bool }
+	byToolUse := map[string]*prePost{}
 	var durations []int
 	for _, ev := range events {
 		if ev.Timestamp != nil {
@@ -475,6 +600,25 @@ func buildSummary(events []Event, filesScanned, filesWith int) Summary {
 			if ev.HookEvent != "" {
 				s.HookEvents[ev.HookEvent]++
 			}
+			switch ev.HookEvent {
+			case "PreToolUse":
+				s.PreToolHooks++
+			case "PostToolUse":
+				s.PostToolHooks++
+			}
+			if ev.ToolUseID != "" {
+				pp := byToolUse[ev.ToolUseID]
+				if pp == nil {
+					pp = &prePost{}
+					byToolUse[ev.ToolUseID] = pp
+				}
+				switch ev.HookEvent {
+				case "PreToolUse":
+					pp.pre = true
+				case "PostToolUse":
+					pp.post = true
+				}
+			}
 			if ev.Adapter != "" {
 				s.Adapters[ev.Adapter]++
 			}
@@ -483,6 +627,10 @@ func buildSummary(events []Event, filesScanned, filesWith int) Summary {
 			}
 			if ev.DurationMs != nil {
 				durations = append(durations, *ev.DurationMs)
+			}
+			if ev.Reason != "" && !reasonSeen[ev.Reason] {
+				reasonSeen[ev.Reason] = true
+				s.Reasons = append(s.Reasons, ev.Reason)
 			}
 			switch ev.Verdict {
 			case VerdictDeny:
@@ -502,13 +650,31 @@ func buildSummary(events []Event, filesScanned, filesWith int) Summary {
 				key += " " + ev.Subcommand
 			}
 			s.CLIVerbs[strings.TrimSpace(key)]++
+			if ev.Binary == "spec-kitty" {
+				switch ev.Verb {
+				case "ledger":
+					s.Ledger.LedgerCLIOps++
+				case "seal":
+					s.Ledger.SealOps++
+				}
+			}
+		}
+	}
+	for _, pp := range byToolUse {
+		if pp.pre && pp.post {
+			s.PrePostPaired++
 		}
 	}
 	for ref := range refs {
 		s.ContextRefs = append(s.ContextRefs, ref)
 	}
 	sort.Strings(s.ContextRefs)
+	sort.Strings(s.Reasons)
 	s.Latency = latencyStats(durations)
+	// Every governed admission durably appends its decision to ledger.db per the
+	// hook contract; that append is not in the transcript, so mark it derived.
+	s.Ledger.AdmissionDecisionsRecorded = s.GovernedActions
+	s.Ledger.Derived = true
 	return s
 }
 
