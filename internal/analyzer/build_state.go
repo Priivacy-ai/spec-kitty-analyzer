@@ -31,6 +31,13 @@ func (s *buildState) missionFor(slug string) *MissionSummary {
 	return s.mission[slug]
 }
 
+// isOpLogPath reports whether path is a real kitty-ops/<id>.jsonl op log — the
+// source that makes an op a genuine dispatch Op. Mirrors opPathRE so both a
+// leading `kitty-ops/…` (relative top-level) and `…/kitty-ops/…` (absolute) match.
+func isOpLogPath(path string) bool {
+	return opPathRE.MatchString(filepath.ToSlash(path))
+}
+
 func (s *buildState) opFor(id string) *OpSummary {
 	if id == "" {
 		id = "unknown"
@@ -112,6 +119,9 @@ func (s *buildState) absorbTimeline(events []TimelineEvent) {
 			op := s.opFor(event.Scope.InvocationID)
 			op.Files = appendUnique(op.Files, event.SourcePath)
 			op.EventCount++
+			if isOpLogPath(event.SourcePath) {
+				op.sawOpEvent = true
+			}
 			for _, failure := range event.Failures {
 				op.FailureModes = appendUnique(op.FailureModes, failure.ID)
 			}

@@ -93,7 +93,10 @@ func buildFindings(events []TimelineEvent, ops []OpSummary) []Finding {
 		}
 	}
 	for _, op := range ops {
-		if op.Status == "open" {
+		// Only flag ops backed by a real kitty-ops op log. Ops synthesized from an
+		// invocation_id merely mentioned in transcript/prose (or a WP review/implement
+		// invocation) are not dispatch Ops that close via profile-invocation complete.
+		if op.Status == "open" && op.sawOpEvent {
 			id := "open_op_orphan"
 			f := byID[id]
 			if f == nil {

@@ -13,9 +13,15 @@ var (
 	missionPathRE   = regexp.MustCompile(`(?:^|[/\s])kitty-specs/([A-Za-z0-9][A-Za-z0-9_.\-]*)`)
 	missionHandleRE = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9_.\-]{0,127}$`)
 	opPathRE        = regexp.MustCompile(`(?:^|[/\s])kitty-ops/([A-Za-z0-9][A-Za-z0-9_.\-]*)\.jsonl`)
-	wpRE            = regexp.MustCompile(`\bWP[0-9]{2,4}\b`)
-	profileFlagRE   = regexp.MustCompile(`--profile\s+([A-Za-z0-9_.:\-]+)`)
-	agentFlagRE     = regexp.MustCompile(`--agent\s+([A-Za-z0-9_.:\-]+)`)
+	// invocationIDRE validates a token pulled from free text before it is trusted
+	// as a Spec Kitty invocation id: either a 32-char hex digest (e.g. a review
+	// invocation) or a 26-char Crockford ULID (e.g. a mission id). This rejects
+	// stray tokens like the struct-tag word "omitempty" that a bare substring scan
+	// would otherwise capture.
+	invocationIDRE = regexp.MustCompile(`(?i)^(?:[0-9a-f]{32}|[0-9A-HJKMNP-TV-Z]{26})$`)
+	wpRE           = regexp.MustCompile(`\bWP[0-9]{2,4}\b`)
+	profileFlagRE  = regexp.MustCompile(`--profile\s+([A-Za-z0-9_.:\-]+)`)
+	agentFlagRE    = regexp.MustCompile(`--agent\s+([A-Za-z0-9_.:\-]+)`)
 )
 
 var knownSlashActions = map[string]string{

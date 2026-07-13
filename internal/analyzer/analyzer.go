@@ -671,12 +671,20 @@ func firstInvocationIDText(text string) string {
 		return ""
 	}
 	tail := text[idx+len(key):]
-	tail = strings.TrimLeft(tail, ` "':=`)
+	tail = strings.TrimLeft(tail, ` "':=,`)
 	fields := strings.Fields(tail)
 	if len(fields) == 0 {
 		return ""
 	}
-	return trimShell(fields[0])
+	id := trimShell(fields[0])
+	// Only accept a token that actually looks like an invocation id. A bare
+	// substring scan otherwise captures struct tags / prose (e.g. the literal
+	// "omitempty" from `json:"invocation_id,omitempty"`), which then fabricates a
+	// phantom op. See patterns.go invocationIDRE.
+	if !invocationIDRE.MatchString(id) {
+		return ""
+	}
+	return id
 }
 
 func firstInvocation(inv []CLIInvocation) CLIInvocation {
