@@ -228,13 +228,14 @@ func includeSet(items []string) map[string]bool {
 	return out
 }
 
-// WantsSpecKittyGo reports whether the caller asked for the spec-kitty-go
-// activity section (`--include go`, or `--include all`). The section is
-// computed by the caller (it needs the raw log files, not just the analyzer
-// report) and attached to Result.SpecKittyGo.
+// WantsSpecKittyGo reports whether the caller explicitly asked for the
+// spec-kitty-go activity section (`--include go`). It is deliberately OPT-IN and
+// NOT part of `all`: the section is computed by the caller from the raw log
+// files (a second full scan the analyzer report can't supply), so folding it
+// into the default `all` would silently double the log I/O on the common path.
 func WantsSpecKittyGo(include []string) bool {
 	set := includeSet(normalizeList(include))
-	return set["all"] || set["go"] || set["spec-kitty-go"] || set["speckittygo"]
+	return set["go"] || set["spec-kitty-go"] || set["speckittygo"]
 }
 
 func filterTimeline(events []analyzer.TimelineEvent, opts Options) []analyzer.TimelineEvent {

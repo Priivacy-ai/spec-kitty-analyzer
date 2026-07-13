@@ -57,8 +57,10 @@ func TestAnalyzeFiles_GovernanceHooks(t *testing.T) {
 	if len(s.ContextRefs) != 1 || s.ContextRefs[0] != "ctx/dogfood/x" {
 		t.Fatalf("context refs wrong: %+v", s.ContextRefs)
 	}
-	// Latency over the four hooks (49, 31, 12, 8).
-	if s.Latency.Count != 4 || s.Latency.MinMs != 8 || s.Latency.MaxMs != 49 {
+	// Latency over the four hooks (sorted 8,12,31,49). Nearest-rank p50 = 12
+	// (the 2nd of 4); a naive 0-indexed rank would wrongly report 31.
+	if s.Latency.Count != 4 || s.Latency.MinMs != 8 || s.Latency.MaxMs != 49 ||
+		s.Latency.P50Ms != 12 || s.Latency.P95Ms != 49 {
 		t.Fatalf("latency wrong: %+v", s.Latency)
 	}
 }
@@ -102,8 +104,10 @@ func TestAnalyzeFiles_PrePostAndLedger(t *testing.T) {
 	if s.PrePostPaired != 1 {
 		t.Fatalf("pre/post paired = %d, want 1", s.PrePostPaired)
 	}
-	if !s.Ledger.Derived || s.Ledger.AdmissionDecisionsRecorded != 4 {
-		t.Fatalf("ledger derived accounting wrong: %+v", s.Ledger)
+	// Admission decisions = PreToolUse hooks only (3); the PostToolUse hook runs
+	// after the side effect and is not an admission, so it must be excluded.
+	if !s.Ledger.Derived || s.Ledger.AdmissionDecisionsRecorded != 3 {
+		t.Fatalf("ledger derived accounting wrong (want 3 Pre-only admissions): %+v", s.Ledger)
 	}
 	if s.Ledger.LedgerCLIOps != 1 {
 		t.Fatalf("ledger CLI ops = %d, want 1 (spec-kitty ledger verify)", s.Ledger.LedgerCLIOps)
@@ -175,10 +179,9 @@ func TestVerdictNotEnforced(t *testing.T) {
 	}
 	rep := AnalyzeFiles([]string{path}, time.Unix(0, 0).UTC())
 
-	// toolu_deny has NO tool_result (blocked/never ran); toolu_write and the
-	// push do -- but only toolu_write and... wait: only toolu_write has a result
-	// here. The two DENYs differ: neither has a result in this fixture except we
-	// gave toolu_write (a DECISION) a result. Assert precisely.
+	// Only toolu_write (a DECISION_REQUIRED) has a tool_result, so it is the one
+	// executed-despite-non-ADMIT case. The two DENYs have no tool_result, so they
+	// must NOT be flagged not-enforced.
 	if rep.Summary.UnenforcedVerdicts != 1 {
 		t.Fatalf("unenforced verdicts = %d, want 1 (only the executed DECISION_REQUIRED)", rep.Summary.UnenforcedVerdicts)
 	}
@@ -247,6 +250,10 @@ func TestVerdictFrom(t *testing.T) {
 		wantVerdict, wantReason   string
 	}{
 		{"admit token", "ADMIT", "ADMIT\n", "hook_success", i(0), VerdictAdmit, ""},
+		// Anchoring: trailing prose that merely mentions a verdict word must not
+		// flip the classification (finding #2).
+		{"admit with prose mentioning deny", "ADMIT\npolicy: would DENY outside workspace", "", "hook_success", i(0), VerdictAdmit, ""},
+		{"deny reason mentioning decision word", "DENY: blocked (was DECISION_REQUIRED earlier)", "", "hook_error", i(1), VerdictDeny, "blocked (was DECISION_REQUIRED earlier)"},
 		{"deny token+reason", "DENY: bad path", "DENY: bad path\n", "hook_error", i(1), VerdictDeny, "bad path"},
 		{"decision token+reason", "DECISION_REQUIRED: protected branch", "", "hook_error", i(3), VerdictDecisionRequired, "protected branch"},
 		// exit-code fallback when a harness recorded no textual content:
@@ -260,6 +267,128 @@ func TestVerdictFrom(t *testing.T) {
 		if gotVerdict != c.wantVerdict || gotReason != c.wantReason {
 			t.Errorf("%s: verdictFrom = (%q,%q), want (%q,%q)", c.name, gotVerdict, gotReason, c.wantVerdict, c.wantReason)
 		}
+	}
+}
+
+// TestTopLevelMessageNarrativeExcluded guards finding #1: a top-level string
+// "message" is assistant/user narrative and must never register as a real CLI
+// invocation, even when it quotes a distinctive go verb.
+func TestTopLevelMessageNarrativeExcluded(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "narrative.jsonl")
+	lines := `{"type":"summary","timestamp":"2026-07-12T10:00:00.000Z","message":"I could run spec-kitty ledger verify and witness-sidecar verify-provenance but I will not."}
+{"type":"assistant","timestamp":"2026-07-12T10:00:01.000Z","message":{"role":"assistant","content":[{"type":"tool_use","id":"t1","name":"Bash","input":{"command":"spec-kitty ledger verify"}}]}}
+`
+	if err := os.WriteFile(path, []byte(lines), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	s := AnalyzeFiles([]string{path}, time.Unix(0, 0).UTC()).Summary
+	// Only the real Bash tool_use invocation counts; the narrative string must not.
+	if s.CLIInvocations != 1 || s.CLIVerbs["spec-kitty ledger verify"] != 1 {
+		t.Fatalf("narrative message leaked into CLI invocations: count=%d verbs=%+v", s.CLIInvocations, s.CLIVerbs)
+	}
+	if s.Ledger.LedgerCLIOps != 1 {
+		t.Fatalf("ledger CLI ops = %d, want 1 (narrative must not inflate)", s.Ledger.LedgerCLIOps)
+	}
+}
+
+// TestExecutedIgnoresErrorResult guards finding #3: a tool_result carrying
+// is_error:true is ambiguous (a blocked tool can still emit one) and must NOT
+// count as "executed", so a correctly-enforced DENY is not mislabeled
+// not-enforced.
+func TestExecutedIgnoresErrorResult(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "errresult.jsonl")
+	lines := `{"type":"assistant","timestamp":"2026-07-12T10:00:00.000Z","message":{"role":"assistant","content":[{"type":"tool_use","id":"toolu_e","name":"Bash","input":{"command":"git push origin main"}}]}}
+{"type":"attachment","timestamp":"2026-07-12T10:00:01.000Z","attachment":{"type":"hook_error","hookName":"PreToolUse:Bash","toolUseID":"toolu_e","hookEvent":"PreToolUse","content":"DENY: shell/exec forbidden under review","exitCode":1,"command":"/bin/spec-kitty hook run --adapter claude-code --event PreToolUse"}}
+{"type":"user","timestamp":"2026-07-12T10:00:02.000Z","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"toolu_e","is_error":true,"content":"blocked by hook"}]}}
+`
+	if err := os.WriteFile(path, []byte(lines), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	rep := AnalyzeFiles([]string{path}, time.Unix(0, 0).UTC())
+	if rep.Summary.UnenforcedVerdicts != 0 {
+		t.Fatalf("unenforced verdicts = %d, want 0 (is_error result is not proof of execution)", rep.Summary.UnenforcedVerdicts)
+	}
+	if rep.Events[0].Executed != nil {
+		t.Fatalf("Executed should be nil for an is_error tool_result, got %v", *rep.Events[0].Executed)
+	}
+}
+
+// TestPrePostPairingScopedByFile guards finding #6: the same tool-use id in two
+// different transcripts represents two different governed actions and must not
+// be paired across files.
+func TestPrePostPairingScopedByFile(t *testing.T) {
+	dir := t.TempDir()
+	pre := `{"type":"attachment","timestamp":"2026-07-12T10:00:00.000Z","attachment":{"type":"hook_success","hookName":"PreToolUse:Read","toolUseID":"toolu_shared","hookEvent":"PreToolUse","content":"ADMIT","exitCode":0,"command":"/bin/spec-kitty hook run"}}` + "\n"
+	post := `{"type":"attachment","timestamp":"2026-07-12T10:00:05.000Z","attachment":{"type":"hook_success","hookName":"PostToolUse:Read","toolUseID":"toolu_shared","hookEvent":"PostToolUse","content":"ADMIT","exitCode":0,"command":"/bin/spec-kitty hook run"}}` + "\n"
+	p1 := filepath.Join(dir, "a.jsonl")
+	p2 := filepath.Join(dir, "b.jsonl")
+	if err := os.WriteFile(p1, []byte(pre), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(p2, []byte(post), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	s := AnalyzeFiles([]string{p1, p2}, time.Unix(0, 0).UTC()).Summary
+	if s.PrePostPaired != 0 {
+		t.Fatalf("pre/post paired = %d, want 0 (same id in different files must not pair)", s.PrePostPaired)
+	}
+}
+
+// TestHookEventInferredFromHookName guards the follow-up completeness fix: a
+// wrapper hook that omits the hookEvent field and the --event flag but names its
+// event in hookName ("PreToolUse:Bash") must still be counted as a PreToolUse
+// admission (ledger + pairing), not silently dropped.
+func TestHookEventInferredFromHookName(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "noevent.jsonl")
+	lines := `{"type":"attachment","timestamp":"2026-07-12T10:00:00.000Z","attachment":{"type":"hook_error","hookName":"PreToolUse:Bash","toolUseID":"toolu_x","content":"DENY: nope","stdout":"DENY: nope\n","exitCode":1,"command":"python3 /x/enrich-hook.py"}}` + "\n"
+	if err := os.WriteFile(path, []byte(lines), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	rep := AnalyzeFiles([]string{path}, time.Unix(0, 0).UTC())
+	s := rep.Summary
+	if rep.Events[0].HookEvent != "PreToolUse" {
+		t.Fatalf("hook event not inferred from hookName: %q", rep.Events[0].HookEvent)
+	}
+	if s.PreToolHooks != 1 || s.Ledger.AdmissionDecisionsRecorded != 1 {
+		t.Fatalf("wrapper admission undercounted: pre=%d admissions=%d", s.PreToolHooks, s.Ledger.AdmissionDecisionsRecorded)
+	}
+}
+
+// TestExecutedOKAmongMixedResults guards the follow-up refinement: a non-error
+// tool_result proves execution even if an is_error result also exists for the
+// same id (retry/duplicate blocks), so a DENY that ultimately ran is flagged.
+func TestExecutedOKAmongMixedResults(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "mixed.jsonl")
+	lines := `{"type":"assistant","timestamp":"2026-07-12T10:00:00.000Z","message":{"role":"assistant","content":[{"type":"tool_use","id":"toolu_m","name":"Bash","input":{"command":"git push origin main"}}]}}
+{"type":"attachment","timestamp":"2026-07-12T10:00:01.000Z","attachment":{"type":"hook_error","hookName":"PreToolUse:Bash","toolUseID":"toolu_m","hookEvent":"PreToolUse","content":"DENY: forbidden","exitCode":1,"command":"/bin/spec-kitty hook run"}}
+{"type":"user","timestamp":"2026-07-12T10:00:02.000Z","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"toolu_m","is_error":true,"content":"transient error"}]}}
+{"type":"user","timestamp":"2026-07-12T10:00:03.000Z","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"toolu_m","content":"pushed"}]}}
+`
+	if err := os.WriteFile(path, []byte(lines), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	rep := AnalyzeFiles([]string{path}, time.Unix(0, 0).UTC())
+	if rep.Summary.UnenforcedVerdicts != 1 {
+		t.Fatalf("unenforced verdicts = %d, want 1 (a non-error result proves execution)", rep.Summary.UnenforcedVerdicts)
+	}
+}
+
+// TestPercentileNearestRank guards finding #5 (off-by-one).
+func TestPercentileNearestRank(t *testing.T) {
+	twenty := make([]int, 20)
+	for i := range twenty {
+		twenty[i] = (i + 1) * 10 // 10..200
+	}
+	if got := percentile(twenty, 95); got != 190 {
+		t.Errorf("p95 of (10..200) = %d, want 190 (19th value), not the max", got)
+	}
+	four := []int{8, 12, 31, 49}
+	if got := percentile(four, 50); got != 12 {
+		t.Errorf("p50 of [8,12,31,49] = %d, want 12", got)
 	}
 }
 

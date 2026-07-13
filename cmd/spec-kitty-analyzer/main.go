@@ -69,7 +69,7 @@ func runQuery(args []string) error {
 	var scopes multiFlag
 	var contains multiFlag
 	fs.Var(&logRoots, "log-root", "additional harness log root to scan (repeatable)")
-	fs.Var(&include, "include", "result sections: all,inputs,missions,ops,findings,timeline,signals,surface,go (repeatable or comma-separated)")
+	fs.Var(&include, "include", "result sections: all,inputs,missions,ops,findings,timeline,signals,surface (repeatable or comma-separated); add 'go' for the spec-kitty-go section (opt-in, not part of 'all')")
 	fs.Var(&failureIDs, "failure-id", "filter timeline/findings to failure ID/title (repeatable or comma-separated)")
 	fs.Var(&commands, "command", "filter timeline to slash/CLI command, verb, mission, WP, agent, or profile (repeatable or comma-separated)")
 	fs.Var(&skills, "skill", "filter timeline to skill name/path (repeatable or comma-separated)")
@@ -280,6 +280,7 @@ func runAnalyze(args []string) error {
 	cacheBust := fs.Bool("cache-bust", false, "rescan every harness log instead of reusing unchanged cache entries")
 	recentLimit := fs.Int("recent", 10, "number of recent harness logs to show when no mission/path is provided")
 	jsonOnly := fs.Bool("json-only", false, "write only JSON")
+	goSummary := fs.Bool("go", false, "also print a one-line spec-kitty-go governance summary (opt-in: an extra scan of the logs)")
 	var logRoots multiFlag
 	fs.Var(&logRoots, "log-root", "additional harness log root to scan (repeatable)")
 	if err := fs.Parse(reorderAnalyzeArgs(args)); err != nil {
@@ -346,7 +347,7 @@ func runAnalyze(args []string) error {
 		fmt.Printf("Wrote PDF: %s\n", pdfPath)
 	}
 	fmt.Printf("Timeline events: %d, missions: %d, ops: %d, failure modes: %d\n", report.Summary.TimelineEvents, report.Summary.Missions, report.Summary.Ops, report.Summary.FailureModes)
-	if len(reportPaths) > 0 {
+	if *goSummary && len(reportPaths) > 0 {
 		g := gogov.AnalyzeFiles(reportPaths, time.Now()).Summary
 		if g.GovernedActions > 0 || g.CLIInvocations > 0 {
 			fmt.Printf("spec-kitty-go: %d governed actions (%s), %d CLI invocations; run `go-activity` for detail\n",

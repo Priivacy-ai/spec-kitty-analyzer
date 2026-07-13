@@ -30,6 +30,7 @@ package gogov
 
 import (
 	"encoding/json"
+	"math"
 	"os"
 	"regexp"
 	"sort"
@@ -248,12 +249,16 @@ func AnalyzeFiles(paths []string, now time.Time) Report {
 
 // extractFromFile reads one transcript file and returns its spec-kitty-go events.
 func extractFromFile(path string) []Event {
+	// Mirror the analyzer engine: stat first and skip oversized files rather
+	// than reading the whole file into memory and truncating (which neither
+	// bounds memory nor matches the set of files the main analyzer scans).
+	info, err := os.Stat(path)
+	if err != nil || info.Size() > maxInputFileBytes {
+		return nil
+	}
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return nil
-	}
-	if len(data) > maxInputFileBytes {
-		data = data[:maxInputFileBytes]
 	}
 	scrubbed, _ := analyzer.Scrub(data)
 	lines := strings.Split(string(scrubbed), "\n")
@@ -283,7 +288,10 @@ func extractFromFile(path string) []Event {
 						hook.GovernedTool = ref.name
 					}
 					hook.GovernedInput = ref.summary
-					if ref.executed {
+					// Executed = the governed tool actually RAN (a non-error
+					// tool_result exists for its id), keeping the enforcement-gap
+					// signal (NotEnforced) conservative.
+					if ref.executedOK {
 						executed := true
 						hook.Executed = &executed
 					}
@@ -318,18 +326,17 @@ func extractFromFile(path string) []Event {
 }
 
 type toolRef struct {
-	name      string
-	summary   string
-	executed  bool // a tool_result was recorded for this id -> the governed tool actually ran
-	execError bool // that tool_result carried is_error:true
+	name       string
+	summary    string
+	executedOK bool // a NON-error tool_result exists for this id -> the governed tool actually ran
 }
 
 // indexToolUses scans transcript lines for tool_use and tool_result blocks and
 // returns a map from tool-use id to what that tool call was doing AND whether it
 // ultimately executed. Execution is the key signal for enforcement: a
-// PreToolUse hook that truly blocks a tool produces no tool_result, so a
-// DENY/DECISION_REQUIRED verdict whose id still has a tool_result was not
-// enforced by the harness. ("tool_use_id" contains the substring "tool_use", so
+// PreToolUse hook that truly blocks a tool produces no successful tool_result,
+// so a DENY/DECISION_REQUIRED verdict whose id still has a non-error tool_result
+// was not enforced by the harness. ("tool_use_id" contains the substring "tool_use", so
 // the cheap prefilter below keeps tool_result lines too.)
 func indexToolUses(lines []string) map[string]*toolRef {
 	index := map[string]*toolRef{}
@@ -373,10 +380,11 @@ func indexToolUses(lines []string) map[string]*toolRef {
 				}
 			case "tool_result":
 				if id := asString(block["tool_use_id"]); id != "" {
-					r := get(id)
-					r.executed = true
-					if e, ok := block["is_error"].(bool); ok && e {
-						r.execError = true
+					// Only a NON-error result proves the tool actually ran; an
+					// is_error result is ambiguous (a blocked tool can emit one).
+					// A later successful result for the same id still counts.
+					if e, _ := block["is_error"].(bool); !e {
+						get(id).executedOK = true
 					}
 				}
 			}
@@ -443,6 +451,17 @@ func hookEventFrom(obj map[string]any) (Event, bool) {
 	if ev.HookEvent == "" {
 		ev.HookEvent = firstSubmatch(eventFlagRe, command)
 	}
+	if ev.HookEvent == "" {
+		// Last resort: hookName is "<Event>:<Tool>" (e.g. "PreToolUse:Bash") —
+		// the prefix before ':' is the hook event. Recovering it keeps admission
+		// counting and Pre/Post pairing correct for wrapper hooks that omit both
+		// the hookEvent field and the --event flag.
+		if hookName := asString(att["hookName"]); hookName != "" {
+			if idx := strings.IndexByte(hookName, ':'); idx > 0 {
+				ev.HookEvent = strings.TrimSpace(hookName[:idx])
+			}
+		}
+	}
 	if dur, ok := asInt(att["durationMs"]); ok {
 		ev.DurationMs = &dur
 	}
@@ -470,33 +489,35 @@ func isSpecKittyGoHookCommand(command string) bool {
 // merely mentions a verdict word does not qualify.
 func isGovernanceVerdictOutput(content, stdout string) bool {
 	for _, s := range []string{content, stdout} {
-		line := strings.TrimSpace(s)
-		if line == "" {
-			continue
-		}
-		if i := strings.IndexByte(line, '\n'); i >= 0 {
-			line = strings.TrimSpace(line[:i])
-		}
-		up := strings.ToUpper(line)
+		up := strings.ToUpper(firstLine(s))
 		switch {
 		case up == VerdictAdmit, up == VerdictDeny, up == VerdictDecisionRequired:
 			return true
-		case strings.HasPrefix(up, "DENY:"), strings.HasPrefix(up, VerdictDecisionRequired+":"):
+		case strings.HasPrefix(up, VerdictDeny+":"), strings.HasPrefix(up, VerdictDecisionRequired+":"):
 			return true
 		}
 	}
 	return false
 }
 
+// firstLine returns the first non-empty, trimmed line of s ("" if none).
+func firstLine(s string) string {
+	for _, ln := range strings.Split(s, "\n") {
+		if t := strings.TrimSpace(ln); t != "" {
+			return t
+		}
+	}
+	return ""
+}
+
 // commandStrings pulls command-bearing strings out of a decoded transcript
-// object: Bash/Shell tool_use inputs, a top-level "message" string, and codex
-// function_call arguments. It deliberately excludes assistant/user narrative
-// text so an agent merely *discussing* a command does not register.
+// object: Bash/Shell tool_use inputs (Claude) and codex function_call
+// arguments. It reads ONLY structured command channels — never a top-level
+// "message" string, which the analyzer core classifies as assistant/user
+// narrative (internal/analyzer/channels.go) — so an agent merely *discussing* a
+// command does not register as a real invocation.
 func commandStrings(obj map[string]any) []string {
 	var out []string
-	if msg := asString(obj["message"]); msg != "" {
-		out = append(out, msg)
-	}
 	// Claude: message.content[] tool_use blocks.
 	if m, ok := obj["message"].(map[string]any); ok {
 		if content, ok := m["content"].([]any); ok {
@@ -602,14 +623,19 @@ func verdictFrom(content, stdout, hookType string, exitCode *int) (verdict, reas
 	if raw == "" {
 		raw = strings.TrimSpace(stdout)
 	}
-	upper := strings.ToUpper(raw)
+	// Classify off the FIRST non-empty line only — the verdict token per the
+	// hook contract. Trailing prose (e.g. an ADMIT that explains it "would DENY
+	// outside the workspace") must not flip the verdict, so this anchors like
+	// isGovernanceVerdictOutput rather than scanning the whole blob.
+	line := firstLine(raw)
+	upper := strings.ToUpper(line)
 	switch {
-	case strings.Contains(upper, VerdictDecisionRequired):
-		return VerdictDecisionRequired, reasonAfterToken(raw, VerdictDecisionRequired)
-	case strings.Contains(upper, VerdictDeny):
-		return VerdictDeny, reasonAfterToken(raw, VerdictDeny)
-	case strings.Contains(upper, VerdictAdmit):
+	case upper == VerdictAdmit:
 		return VerdictAdmit, ""
+	case upper == VerdictDecisionRequired || strings.HasPrefix(upper, VerdictDecisionRequired+":"):
+		return VerdictDecisionRequired, reasonAfterToken(line, VerdictDecisionRequired)
+	case upper == VerdictDeny || strings.HasPrefix(upper, VerdictDeny+":"):
+		return VerdictDeny, reasonAfterToken(line, VerdictDeny)
 	}
 	// No verdict token: fall back to the exit-code contract.
 	if exitCode != nil {
@@ -687,10 +713,14 @@ func buildSummary(events []Event, filesScanned, filesWith int) Summary {
 				s.PostToolHooks++
 			}
 			if ev.ToolUseID != "" {
-				pp := byToolUse[ev.ToolUseID]
+				// Key by (source file, tool-use id): tool-use ids are only
+				// unique within a transcript, so two sessions can reuse an id
+				// without being the same governed action.
+				pairKey := ev.SourcePath + "\x00" + ev.ToolUseID
+				pp := byToolUse[pairKey]
 				if pp == nil {
 					pp = &prePost{}
-					byToolUse[ev.ToolUseID] = pp
+					byToolUse[pairKey] = pp
 				}
 				switch ev.HookEvent {
 				case "PreToolUse":
@@ -752,9 +782,11 @@ func buildSummary(events []Event, filesScanned, filesWith int) Summary {
 	sort.Strings(s.ContextRefs)
 	sort.Strings(s.Reasons)
 	s.Latency = latencyStats(durations)
-	// Every governed admission durably appends its decision to ledger.db per the
-	// hook contract; that append is not in the transcript, so mark it derived.
-	s.Ledger.AdmissionDecisionsRecorded = s.GovernedActions
+	// Each PreToolUse admission durably appends its decision to ledger.db per the
+	// hook contract (the append is out-of-band, so mark it derived). PostToolUse
+	// hooks run *after* the side effect and are not admissions, so they are
+	// excluded from the admission-decision count.
+	s.Ledger.AdmissionDecisionsRecorded = s.PreToolHooks
 	s.Ledger.Derived = true
 	return s
 }
@@ -780,15 +812,20 @@ func latencyStats(durations []int) LatencyStats {
 }
 
 // percentile returns the p-th percentile (nearest-rank) of a pre-sorted slice.
+// Nearest-rank uses a 1-indexed ordinal rank of ceil(p/100 * n), so p50 of
+// [8,12,31,49] is 12 (not 31) and p95 of 20 values is the 19th (not the max).
 func percentile(sorted []int, p int) int {
 	if len(sorted) == 0 {
 		return 0
 	}
-	rank := (p * len(sorted)) / 100
-	if rank >= len(sorted) {
-		rank = len(sorted) - 1
+	rank := int(math.Ceil(float64(p) / 100 * float64(len(sorted))))
+	if rank < 1 {
+		rank = 1
 	}
-	return sorted[rank]
+	if rank > len(sorted) {
+		rank = len(sorted)
+	}
+	return sorted[rank-1]
 }
 
 // --- small decoding helpers (kept local so the delicate analyzer package is untouched) ---

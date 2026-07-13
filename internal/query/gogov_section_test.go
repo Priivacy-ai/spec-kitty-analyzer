@@ -11,11 +11,11 @@ func TestWantsSpecKittyGo(t *testing.T) {
 		include []string
 		want    bool
 	}{
-		{nil, false},                    // default include is applied by the caller, not here
-		{[]string{"timeline"}, false},   // unrelated section
-		{[]string{"go"}, true},          // explicit
-		{[]string{"all"}, true},         // all subsumes go
-		{[]string{"GO"}, true},          // case-insensitive via normalizeList
+		{nil, false},                  // default include is applied by the caller, not here
+		{[]string{"timeline"}, false}, // unrelated section
+		{[]string{"go"}, true},        // explicit
+		{[]string{"all"}, false},      // opt-in: 'all' does NOT subsume go (avoids a silent 2nd scan)
+		{[]string{"GO"}, true},        // case-insensitive via normalizeList
 		{[]string{"signals", "go"}, true},
 		{[]string{"spec-kitty-go"}, true},
 	}

@@ -153,11 +153,14 @@ with `ledger` subcommands `list/show/tail/verify/seal`) and the go-only
 (`bin/spec-kitty`, `cmd/spec-kitty`, `go run ./cmd/spec-kitty`).
 
 The same view is woven into the agent-facing `query` command as a
-`spec_kitty_go` section (`--include go`, or `all`), and `analyze` prints a
-one-line spec-kitty-go governance summary next to its mission stats:
+`spec_kitty_go` section. Because it needs a second scan of the raw logs, it is
+**opt-in**: request it with `--include go` (it is deliberately *not* part of
+`all`). Likewise `analyze --go` prints a one-line spec-kitty-go governance
+summary next to its mission stats:
 
 ```bash
 spec-kitty-analyzer query my-mission-slug --include timeline,signals,go
+spec-kitty-analyzer analyze --mission my-mission-slug --go
 ```
 
 ## Agent JSON API
@@ -192,7 +195,7 @@ spec-kitty-analyzer query task-workflow-bug-fixes-01KV69BZ \
 
 Selectors can be repeated or comma-separated:
 
-- `--include all|inputs|missions|ops|findings|timeline|signals|surface`
+- `--include all|inputs|missions|ops|findings|timeline|signals|surface` (add `go` for the opt-in spec-kitty-go section; not part of `all`)
 - `--failure-id <id-or-title>`
 - `--command <slash-name|cli-verb|mission|work-package|agent|profile>`
 - `--skill <skill-name-or-path>`
