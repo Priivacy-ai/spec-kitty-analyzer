@@ -234,6 +234,45 @@ func hasPathSegment(slashPath, segment string) bool {
 	return false
 }
 
+// buildCodexContext scans a file's bytes for codex function_call payloads and builds the
+// callID → codexCall registry consulted during channel extraction (WP03/R1). It is a
+// lightweight prepass — decoding lines only to find function_call payloads, not to build
+// events — so a function_call_output correlates to its function_call regardless of order.
+// A file with no codex function_calls yields an empty (non-nil) registry, reproducing
+// today's behavior. The registry is local to one parseFile call and never crosses files.
+func buildCodexContext(data []byte) channelContext {
+	ctx := channelContext{codexCalls: map[string]codexCall{}}
+	register := func(obj map[string]any) {
+		payload, ok := obj["payload"].(map[string]any)
+		if !ok {
+			return
+		}
+		if t, _ := payload["type"].(string); t != "function_call" {
+			return
+		}
+		if call := newCodexCall(payload); call.callID != "" {
+			ctx.codexCalls[call.callID] = call
+		}
+	}
+	// Whole-file JSON object shape (mirrors parseFile's .json intake).
+	if obj, ok := decodeJSONObject(bytes.TrimSpace(data)); ok {
+		register(obj)
+	}
+	// Line-delimited (.jsonl) shape.
+	scanner := bufio.NewScanner(bytes.NewReader(data))
+	scanner.Buffer(make([]byte, 0, 64*1024), 4*1024*1024)
+	for scanner.Scan() {
+		raw := bytes.TrimSpace(scanner.Bytes())
+		if len(raw) == 0 {
+			continue
+		}
+		if obj, ok := decodeJSONObject(raw); ok {
+			register(obj)
+		}
+	}
+	return ctx
+}
+
 func parseFile(path, kind string, data []byte, startTurn int, state *buildState) ([]TimelineEvent, int) {
 	if kind == "mission_meta" {
 		state.readMissionMeta(path, data)
@@ -241,9 +280,13 @@ func parseFile(path, kind string, data []byte, startTurn int, state *buildState)
 	if kind == "work_package" {
 		state.readWorkPackage(path, data)
 	}
+	// Per-file prepass (WP03/R1): build the codex call registry once, before the event
+	// walk, so a function_call_output correlates to its function_call regardless of line
+	// order. A file with no codex function_calls yields an empty context → today's behavior.
+	ctx := buildCodexContext(data)
 	if strings.HasSuffix(strings.ToLower(path), ".json") {
 		if obj, ok := decodeJSONObject(bytes.TrimSpace(data)); ok {
-			event := eventFromJSONObject(path, 1, startTurn+1, obj)
+			event := eventFromJSONObjectCtx(path, 1, startTurn+1, obj, ctx)
 			if event.Kind != "" && !skipArtifactMessage(kind, &event) {
 				return []TimelineEvent{event}, startTurn + 1
 			}
@@ -276,9 +319,9 @@ func parseFile(path, kind string, data []byte, startTurn int, state *buildState)
 		turn++
 		var event TimelineEvent
 		if obj, ok := decodeJSONObject(raw); ok {
-			event = eventFromJSONObject(path, lineNo, turn, obj)
+			event = eventFromJSONObjectCtx(path, lineNo, turn, obj, ctx)
 		} else {
-			event = eventFromText(path, lineNo, turn, string(raw), nil)
+			event = eventFromTextCtx(path, lineNo, turn, string(raw), nil, ctx)
 		}
 		// Single suppression gate (design issue-4 §5): every parseFile event — JSON
 		// object line or plain text line — passes through skipArtifactMessage once,
@@ -297,12 +340,19 @@ func parseFile(path, kind string, data []byte, startTurn int, state *buildState)
 }
 
 func eventFromJSONObject(path string, line, turn int, obj map[string]any) TimelineEvent {
+	return eventFromJSONObjectCtx(path, line, turn, obj, channelContext{})
+}
+
+// eventFromJSONObjectCtx is eventFromJSONObject with the per-file codex call registry
+// threaded to channel extraction (WP03). The stateless wrapper above passes an empty
+// context, preserving behavior for every caller that does not build a registry.
+func eventFromJSONObjectCtx(path string, line, turn int, obj map[string]any, ctx channelContext) TimelineEvent {
 	text := flattenJSON(obj)
 	if strings.TrimSpace(text) == "" {
 		encoded, _ := json.Marshal(obj)
 		text = string(encoded)
 	}
-	event := eventFromText(path, line, turn, text, obj)
+	event := eventFromTextCtx(path, line, turn, text, obj, ctx)
 	event.Timestamp = parseJSONTime(obj)
 	event.RawJSONKeys = jsonKeys(obj)
 	event.ToolName = firstJSONStringByKey(obj, "tool", "tool_name", "name")
@@ -422,6 +472,12 @@ func failureListContains(failures []FailureFingerprint, id string) bool {
 }
 
 func eventFromText(path string, line, turn int, text string, obj map[string]any) TimelineEvent {
+	return eventFromTextCtx(path, line, turn, text, obj, channelContext{})
+}
+
+// eventFromTextCtx is eventFromText with the per-file codex call registry threaded to
+// channelStringsForEventCtx (WP03). The stateless wrapper above passes an empty context.
+func eventFromTextCtx(path string, line, turn int, text string, obj map[string]any, ctx channelContext) TimelineEvent {
 	slash := detectSlashCommands(text)
 	cli := detectCLIInvocations(text)
 	skills := detectSkills(text)
@@ -443,7 +499,7 @@ func eventFromText(path string, line, turn int, text string, obj map[string]any)
 	// The single skipArtifactMessage suppression gate (parseFile) is applied AFTER
 	// this returns, before findings aggregation — see channelStringsForEvent and the
 	// parseFile gate comment.
-	outCh, diagCh := channelStringsForEvent(path, text, obj)
+	outCh, diagCh := channelStringsForEventCtx(path, text, obj, ctx)
 	// The source kind (from the path, §3d vocabulary) gates the structural
 	// review_rejected detector to spec-kitty live-event streams only.
 	failures := classifyFailuresWithChannels(outCh, diagCh, classifyPathKind(path), obj, cli)
@@ -492,6 +548,14 @@ func eventFromText(path string, line, turn int, text string, obj map[string]any)
 //   - obj == nil: the line is raw, non-JSON text with no harness structure to route,
 //     so resolve it by SOURCE KIND (§3d), not by content.
 func channelStringsForEvent(path, text string, obj map[string]any) (outCh, diagCh string) {
+	return channelStringsForEventCtx(path, text, obj, channelContext{})
+}
+
+// channelStringsForEventCtx is channelStringsForEvent with the per-file codex call
+// registry (WP03). Only the obj != nil branch consults it: a codex function_call_output
+// correlated to a read command is gated per the channel-matrix contract. An empty
+// context reproduces channelStringsForEvent exactly.
+func channelStringsForEventCtx(path, text string, obj map[string]any, ctx channelContext) (outCh, diagCh string) {
 	if obj != nil {
 		// §3c typed extraction (WP01) — already applies the §3a code-edit/file-read
 		// exclusion, so a code edit or file read reaches NEITHER channel. Call the
@@ -500,7 +564,7 @@ func channelStringsForEvent(path, text string, obj map[string]any) (outCh, diagC
 		// the channels.go "unmapped event shape" stderr log twice for one event. The
 		// two strings are byte-identical to the old two-call results: outputText joins
 		// ct.output; diagnosticText joins ct.output followed by ct.narrative.
-		return channelTextPair(obj)
+		return channelTextPairCtx(obj, ctx)
 	}
 
 	// §3d plain-text model: a raw, non-JSON line has no harness structure to route,

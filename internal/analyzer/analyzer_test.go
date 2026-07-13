@@ -710,3 +710,62 @@ func hasFinding(report Report, id string) bool {
 	}
 	return false
 }
+
+func anyEventFailure(events []TimelineEvent, id string) bool {
+	for _, e := range events {
+		if failureListHas(e.Failures, id) {
+			return true
+		}
+	}
+	return false
+}
+
+// TestCodexReadOutputScopingThroughAnalyzer is the WP03 black-box integration proof
+// (DIRECTIVE_036): drive parseFile over a codex session and assert on emitted failures.
+// A read command's output carrying a failure-like banner is excluded (no FP, #13), while
+// an unknown-id output is scanned (recall), and the per-file prepass tolerates a
+// function_call_output appearing before its function_call.
+func TestCodexReadOutputScopingThroughAnalyzer(t *testing.T) {
+	path := "session.jsonl"
+	kind := classifyPathKind(path)
+
+	functionCall := func(callID, cmd string) string {
+		args, _ := json.Marshal(map[string]any{"cmd": cmd})
+		b, _ := json.Marshal(map[string]any{"payload": map[string]any{
+			"type": "function_call", "name": "exec_command",
+			"arguments": string(args), "call_id": callID,
+		}})
+		return string(b)
+	}
+	functionCallOutput := func(callID, output string) string {
+		b, _ := json.Marshal(map[string]any{"payload": map[string]any{
+			"type": "function_call_output", "call_id": callID, "output": output,
+		}})
+		return string(b)
+	}
+	// A codex read (git show) of a doc whose content is a Typer usage banner — the exact
+	// #13 false-positive shape (Usage: spec-kitty is an output-scoped typer_usage_error signal).
+	usageBanner := "Chunk ID: x\nProcess exited with code 0\nOutput:\nUsage: spec-kitty analyze [OPTIONS]\nError: No such option: --bogus\n"
+
+	// 1. Read exit-0 output with the banner → excluded → no typer_usage_error (#13 fix).
+	readData := []byte(functionCall("c1", "git show HEAD:docs/cli.md") + "\n" + functionCallOutput("c1", usageBanner) + "\n")
+	readEvents, _ := parseFile(path, kind, readData, 0, newBuildState())
+	if anyEventFailure(readEvents, "typer_usage_error") {
+		t.Errorf("read-content usage banner must NOT classify typer_usage_error (#13)")
+	}
+
+	// 2. Same banner with NO correlated function_call → scanned → typer_usage_error present (recall).
+	unknownData := []byte(functionCallOutput("nomatch", usageBanner) + "\n")
+	unknownEvents, _ := parseFile(path, kind, unknownData, 0, newBuildState())
+	if !anyEventFailure(unknownEvents, "typer_usage_error") {
+		t.Errorf("unknown-id output must be scanned (recall-safe); expected typer_usage_error")
+	}
+
+	// 3. Out-of-order: the function_call_output precedes its function_call → still excluded,
+	//    because the prepass registry is built before the event walk.
+	oooData := []byte(functionCallOutput("c3", usageBanner) + "\n" + functionCall("c3", "git diff") + "\n")
+	oooEvents, _ := parseFile(path, kind, oooData, 0, newBuildState())
+	if anyEventFailure(oooEvents, "typer_usage_error") {
+		t.Errorf("out-of-order read must still be excluded (prepass tolerance)")
+	}
+}

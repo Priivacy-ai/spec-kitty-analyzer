@@ -1,0 +1,83 @@
+{
+  "version": 1,
+  "mission_slug": "codex-read-output-scoping-01KWMXCQ",
+  "mission_id": "01KWMXCQ2REFA6YRE04P3TP723",
+  "mission_branch": "kitty/mission-codex-read-output-scoping-01KWMXCQ",
+  "target_branch": "fix/codex-read-output-scoping",
+  "lanes": [
+    {
+      "lane_id": "lane-a",
+      "wp_ids": [
+        "WP01"
+      ],
+      "write_scope": [
+        "internal/analyzer/patterns.go",
+        "internal/analyzer/patterns_test.go"
+      ],
+      "predicted_surfaces": [
+        "api"
+      ],
+      "depends_on_lanes": [],
+      "parallel_group": 0
+    },
+    {
+      "lane_id": "lane-b",
+      "wp_ids": [
+        "WP02"
+      ],
+      "write_scope": [
+        "internal/analyzer/channels.go",
+        "internal/analyzer/channels_test.go"
+      ],
+      "predicted_surfaces": [
+        "api"
+      ],
+      "depends_on_lanes": [
+        "lane-a"
+      ],
+      "parallel_group": 1
+    },
+    {
+      "lane_id": "lane-c",
+      "wp_ids": [
+        "WP03"
+      ],
+      "write_scope": [
+        "internal/analyzer/analyzer.go",
+        "internal/analyzer/analyzer_test.go"
+      ],
+      "predicted_surfaces": [
+        "api",
+        "artifact-rendering",
+        "tests"
+      ],
+      "depends_on_lanes": [
+        "lane-a",
+        "lane-b"
+      ],
+      "parallel_group": 2
+    },
+    {
+      "lane_id": "lane-d",
+      "wp_ids": [
+        "WP04"
+      ],
+      "write_scope": [
+        "internal/analyzer/corpus_codex_test.go",
+        "internal/analyzer/testdata/codex/**"
+      ],
+      "predicted_surfaces": [
+        "api",
+        "tests"
+      ],
+      "depends_on_lanes": [
+        "lane-b",
+        "lane-c"
+      ],
+      "parallel_group": 3
+    }
+  ],
+  "computed_at": "2026-07-03T21:59:19.052367+00:00",
+  "computed_from": "dependency_graph+ownership",
+  "planning_artifact_wps": []
+}

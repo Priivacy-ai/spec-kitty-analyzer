@@ -156,6 +156,15 @@ phrase — does not register as a failure. This sharply reduces false positives
 while preserving the distinctive signatures that indicate a real, observed
 condition.
 
+The same principle covers **codex file-read and inspection commands**. When a
+codex agent runs `cat`, `git diff`/`git show`, or `rg`/`grep`, the returned text
+is file/diff/search *content*, not command-failure output — so error-like phrases
+inside it (a diff that adds `raise AssertionError`, a doc that mentions `exit code
+2`) are excluded from failure scanning. A genuine command failure is still caught:
+a non-read command is scanned normally, and a read that itself fails keeps its
+status/error header. When the command's intent is unknown, the analyzer scans (it
+never suppresses a real failure to gain precision).
+
 ## Limitations
 
 The analyzer is deterministic and pattern-based: it recognizes *documented* Spec

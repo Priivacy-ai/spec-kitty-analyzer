@@ -1,0 +1,79 @@
+{
+  "mission_slug": "codex-read-output-scoping-01KWMXCQ",
+  "mission_number": "",
+  "mission_type": "software-dev",
+  "overall_verdict": "pass",
+  "criteria": [
+    {
+      "criterion_id": "FR-001",
+      "description": "Output of a codex read/inspection command is excluded from BOTH the output and diagnostic (narrative) channels.",
+      "proof_type": "automated_test",
+      "evidence": "TestCodexReadOutputGating rows 1/5/7: a read git diff / rg|head / callId read at exit 0 yields empty output AND empty narrative (\u00a73a mirror). channels.go gateCodexFunctionCallOutput.",
+      "pass_fail": "pass",
+      "verified_by": "kent (maintainer) via Claude orchestration + adversarial Codex review",
+      "verified_at": "2026-07-03T23:30:00Z",
+      "notes": "Verified via co-located test-first tests + frozen-corpus diff; per-WP Codex review."
+    },
+    {
+      "criterion_id": "FR-002",
+      "description": "The command behind a function_call_output is correlated from the preceding function_call via a shared id, using a per-source-file registry built before extraction.",
+      "proof_type": "automated_test",
+      "evidence": "TestCodexReadOutputScopingThroughAnalyzer: paired function_call+function_call_output excluded; out-of-order (output before call) still correlates via buildCodexContext prepass (analyzer.go).",
+      "pass_fail": "pass",
+      "verified_by": "kent (maintainer) via Claude orchestration + adversarial Codex review",
+      "verified_at": "2026-07-03T23:30:00Z",
+      "notes": "Verified via co-located test-first tests + frozen-corpus diff; per-WP Codex review."
+    },
+    {
+      "criterion_id": "FR-003",
+      "description": "A codex command is read/inspection only when every operator-split segment leads with a read command, no write redirection, no mutating op; else scanned.",
+      "proof_type": "automated_test",
+      "evidence": "TestClassifyCodexReadCommand: compound `git diff && go build`, substitution `cat $(rm x)`/`<(...)`, redirection, find -delete, git --ext-diff/--output, rg --pre, env-prefix, dangling operator all -> not read. Hardened over 9 adversarial Codex rounds.",
+      "pass_fail": "pass",
+      "verified_by": "kent (maintainer) via Claude orchestration + adversarial Codex review",
+      "verified_at": "2026-07-03T23:30:00Z",
+      "notes": "Verified via co-located test-first tests + frozen-corpus diff; per-WP Codex review."
+    },
+    {
+      "criterion_id": "FR-004",
+      "description": "Read output is envelope-aware: exit-0 read fully excluded; non-zero read keeps only the status header; unparseable envelope scanned.",
+      "proof_type": "automated_test",
+      "evidence": "TestParseCodexOutputEnvelope + TestCodexReadOutputGating row 2 (cat missing exit 1 keeps 'Process exited with code 1' header, drops bulk).",
+      "pass_fail": "pass",
+      "verified_by": "kent (maintainer) via Claude orchestration + adversarial Codex review",
+      "verified_at": "2026-07-03T23:30:00Z",
+      "notes": "Verified via co-located test-first tests + frozen-corpus diff; per-WP Codex review."
+    },
+    {
+      "criterion_id": "FR-005",
+      "description": "A non-read command, or an output whose id has no matching command, is scanned exactly as before (recall-safe default).",
+      "proof_type": "automated_test",
+      "evidence": "TestCodexReadOutputGating rows 3/4/6 + non-string/unparseable fallback cases: real command, compound, and unknown call_id are scanned in full.",
+      "pass_fail": "pass",
+      "verified_by": "kent (maintainer) via Claude orchestration + adversarial Codex review",
+      "verified_at": "2026-07-03T23:30:00Z",
+      "notes": "Verified via co-located test-first tests + frozen-corpus diff; per-WP Codex review."
+    },
+    {
+      "criterion_id": "FR-006",
+      "description": "The genuinely-unmapped codex payload types are mapped; already-mapped types are unchanged.",
+      "proof_type": "automated_test",
+      "evidence": "TestCodexPayloadMapping: function_call/task_started/empty excluded, user_message->narrative; reasoning/message/agent_message/task_complete/token_count unchanged (R5 regression guard).",
+      "pass_fail": "pass",
+      "verified_by": "kent (maintainer) via Claude orchestration + adversarial Codex review",
+      "verified_at": "2026-07-03T23:30:00Z",
+      "notes": "Verified via co-located test-first tests + frozen-corpus diff; per-WP Codex review."
+    },
+    {
+      "criterion_id": "FR-007",
+      "description": "Both call_id and callId spellings of the correlation id are recognized.",
+      "proof_type": "automated_test",
+      "evidence": "TestCodexReadOutputGating row 7 (camelCase callId read excluded) + codexCallID helper reads call_id then callId.",
+      "pass_fail": "pass",
+      "verified_by": "kent (maintainer) via Claude orchestration + adversarial Codex review",
+      "verified_at": "2026-07-03T23:30:00Z",
+      "notes": "Verified via co-located test-first tests + frozen-corpus diff; per-WP Codex review."
+    }
+  ],
+  "negative_invariants": []
+}
