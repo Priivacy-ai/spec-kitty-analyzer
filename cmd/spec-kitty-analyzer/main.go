@@ -38,7 +38,8 @@ func run(args []string) error {
 	case "missions":
 		return runMissions(args[1:])
 	case "version", "--version", "-v":
-		fmt.Println("spec-kitty-analyzer " + analyzer.Version)
+		fmt.Printf("spec-kitty-analyzer %s (commit %s, built %s)\n",
+			analyzer.Version, analyzer.Commit, analyzer.BuildDate)
 		return nil
 	case "help", "--help", "-h":
 		usage()
@@ -116,6 +117,13 @@ func runQuery(args []string) error {
 	return writeJSONResult(*out, result)
 }
 
+type missionsResult struct {
+	Build    analyzer.Build          `json:"build"`
+	Cache    missionquery.CacheInfo  `json:"cache"`
+	Count    int                     `json:"count"`
+	Missions []discovery.MissionLogs `json:"missions"`
+}
+
 func runMissions(args []string) error {
 	fs := flag.NewFlagSet("missions", flag.ContinueOnError)
 	out := fs.String("out", "", "path to write mission index JSON (default: stdout)")
@@ -135,13 +143,8 @@ func runMissions(args []string) error {
 		return err
 	}
 	missions := discoveryMissionList(cache, *limit)
-	result := struct {
-		Version  string                  `json:"version"`
-		Cache    missionquery.CacheInfo  `json:"cache"`
-		Count    int                     `json:"count"`
-		Missions []discovery.MissionLogs `json:"missions"`
-	}{
-		Version: analyzer.Version,
+	result := missionsResult{
+		Build: analyzer.CurrentBuild(),
 		Cache: missionquery.CacheInfo{
 			Path:         stats.CachePath,
 			LastRunAt:    cache.LastRunAt,

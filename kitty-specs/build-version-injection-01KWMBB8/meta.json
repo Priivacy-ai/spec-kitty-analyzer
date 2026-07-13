@@ -1,0 +1,19 @@
+{
+  "baseline_merge_commit": "cec2de9e173d38e0504ea414d0aad5918170af51",
+  "coordination_branch": "kitty/mission-build-version-injection-01KWMBB8",
+  "created_at": "2026-07-03T16:00:19.690729+00:00",
+  "flattened": false,
+  "friendly_name": "Build Version & Metadata Injection",
+  "mission_id": "01KWMBB878K806KR7N6YAV67EK",
+  "mission_number": 2,
+  "mission_slug": "build-version-injection-01KWMBB8",
+  "mission_type": "software-dev",
+  "pr_bound": true,
+  "purpose_context": "Today the analyzer's version is a hardcoded Go constant that must be manually bumped to match each release tag, and shipped binaries carry no commit or build-date provenance. This mission injects version, commit SHA, and build date at release-build time via linker flags and surfaces them as a structured build object in the version command and report JSON, so every binary is traceable to the commit that produced it and no release ships a mismatched version again. Closes issues #19 and #21.",
+  "purpose_tldr": "Binaries report their real version, commit, and build date from the release build instead of a hand-edited constant.",
+  "slug": "build-version-injection-01KWMBB8",
+  "target_branch": "feat/build-version-injection",
+  "topology": "coord",
+  "vcs": "git",
+  "vcs_locked_at": "2026-07-03T16:58:37.920291+00:00"
+}

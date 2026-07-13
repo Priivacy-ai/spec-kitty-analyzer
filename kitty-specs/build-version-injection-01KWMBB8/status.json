@@ -1,0 +1,42 @@
+{
+  "event_count": 31,
+  "last_event_id": "01KWMQ26VZ7T4XZ0R482Z40MRM",
+  "materialized_at": "2026-07-03T19:25:06.303610+00:00",
+  "mission_number": "2",
+  "mission_slug": "build-version-injection-01KWMBB8",
+  "mission_type": "software-dev",
+  "summary": {
+    "approved": 0,
+    "blocked": 0,
+    "canceled": 0,
+    "claimed": 0,
+    "done": 3,
+    "for_review": 0,
+    "in_progress": 0,
+    "in_review": 0,
+    "planned": 0
+  },
+  "work_packages": {
+    "WP01": {
+      "actor": "merge",
+      "force_count": 1,
+      "lane": "done",
+      "last_event_id": "01KWMQ233HZECHDXVE1JWN5HJ9",
+      "last_transition_at": "2026-07-03T19:25:02.449369+00:00"
+    },
+    "WP02": {
+      "actor": "merge",
+      "force_count": 0,
+      "lane": "done",
+      "last_event_id": "01KWMQ258EXDBQMY20J7G5MERD",
+      "last_transition_at": "2026-07-03T19:25:04.654167+00:00"
+    },
+    "WP03": {
+      "actor": "merge",
+      "force_count": 1,
+      "lane": "done",
+      "last_event_id": "01KWMQ26VZ7T4XZ0R482Z40MRM",
+      "last_transition_at": "2026-07-03T19:25:06.303610+00:00"
+    }
+  }
+}

@@ -30,7 +30,7 @@ func Analyze(paths []string) (Report, error) {
 
 	state := newBuildState()
 	report := Report{
-		Version:     Version,
+		Build:       CurrentBuild(),
 		GeneratedAt: time.Now().UTC(),
 		Redactions:  map[string]int{},
 		Surface:     defaultSurface(),

@@ -21,7 +21,7 @@ type Options struct {
 }
 
 type Result struct {
-	Version        string                        `json:"version"`
+	Build          analyzer.Build                `json:"build"`
 	GeneratedAt    time.Time                     `json:"generated_at"`
 	Mission        string                        `json:"mission,omitempty"`
 	ShortTitle     string                        `json:"short_title,omitempty"`
@@ -136,7 +136,7 @@ func Build(report analyzer.Report, mission string, shortTitle string, opts Optio
 		FailureHits:            len(signals.Failures),
 	}
 	result := Result{
-		Version:        report.Version,
+		Build:          report.Build,
 		GeneratedAt:    report.GeneratedAt,
 		Mission:        mission,
 		ShortTitle:     shortTitle,

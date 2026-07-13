@@ -1,14 +1,43 @@
 package query
 
 import (
+	"encoding/json"
 	"testing"
 
 	"github.com/priivacy-ai/spec-kitty-analyzer/internal/analyzer"
 )
 
+// TestResultJSONHasNestedBuildAndNoTopLevelVersion covers FR-002 + FR-005 for
+// the query emitter: nested `build` object present with its three fields, and
+// no top-level `version` key.
+func TestResultJSONHasNestedBuildAndNoTopLevelVersion(t *testing.T) {
+	data, err := json.Marshal(Result{Build: analyzer.Build{Version: "0.3.0", Commit: "abc1234", BuildDate: "2026-07-03T18:00:00Z"}})
+	if err != nil {
+		t.Fatalf("marshal Result: %v", err)
+	}
+	var m map[string]json.RawMessage
+	if err := json.Unmarshal(data, &m); err != nil {
+		t.Fatalf("unmarshal Result: %v", err)
+	}
+	if _, ok := m["version"]; ok {
+		t.Errorf("top-level \"version\" must be absent, got: %s", data)
+	}
+	raw, ok := m["build"]
+	if !ok {
+		t.Fatalf("nested \"build\" object missing, got: %s", data)
+	}
+	var b analyzer.Build
+	if err := json.Unmarshal(raw, &b); err != nil {
+		t.Fatalf("unmarshal build: %v", err)
+	}
+	if b.Version != "0.3.0" || b.Commit != "abc1234" || b.BuildDate != "2026-07-03T18:00:00Z" {
+		t.Errorf("build=%+v, want {0.3.0 abc1234 2026-07-03T18:00:00Z}", b)
+	}
+}
+
 func TestBuildReturnsFilteredTimelineAndSignals(t *testing.T) {
 	report := analyzer.Report{
-		Version: "test",
+		Build: analyzer.Build{Version: "test"},
 		Timeline: []analyzer.TimelineEvent{
 			{
 				Seq:         1,
@@ -46,7 +75,7 @@ func TestBuildReturnsFilteredTimelineAndSignals(t *testing.T) {
 
 func TestBuildFiltersByFailureID(t *testing.T) {
 	report := analyzer.Report{
-		Version: "test",
+		Build: analyzer.Build{Version: "test"},
 		Timeline: []analyzer.TimelineEvent{
 			{
 				Seq:            1,
@@ -76,7 +105,7 @@ func TestBuildFiltersByFailureID(t *testing.T) {
 
 func TestBuildCommandMergeIncludesMergeFailureFingerprint(t *testing.T) {
 	report := analyzer.Report{
-		Version: "test",
+		Build: analyzer.Build{Version: "test"},
 		Timeline: []analyzer.TimelineEvent{
 			{
 				Seq:            1,
