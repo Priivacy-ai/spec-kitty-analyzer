@@ -290,9 +290,11 @@ func actionFromCommand(inv CLIInvocation, slash []SlashCommand) string {
 // inclusion only costs a benign extra scan. (FR-003, FR-004, C-003 — no shell parser.)
 
 // readCommandSet is the allowlist of commands whose output is inspection CONTENT,
-// not command-failure output. Kept deliberately minimal (recall over reach). `sed`
-// and `awk` are excluded on purpose: both can mutate in place (`sed -i`) or redirect,
-// so they are not pure reads. `true`/`false` are harmless shell no-ops that appear in
+// not command-failure output. Kept deliberately minimal (recall over reach). `awk` is
+// excluded on purpose (it can mutate/redirect), so it is not a pure read. `sed` is NOT
+// in this bare set either: it is classified by segmentIsRead with option/script
+// inspection (a print-only `sed -n 'M,Np'` is a read; any in-place/write/exec/transform
+// form is scanned — #37). `true`/`false` are harmless shell no-ops that appear in
 // read pipelines (e.g. `rg foo || true`) and produce no content and no real failure.
 // `find` is deliberately NOT in this set: it can mutate (`-delete`, `-exec`) so it is
 // classified by segmentIsRead with option inspection, not by a bare head lookup.
@@ -432,9 +434,140 @@ func segmentIsRead(seg string) bool {
 			}
 		}
 		return true
+	case "sed":
+		// `sed` is a read ONLY when it just prints/extracts. It is excluded from the
+		// bare allowlist because it can edit in place (`-i`), write/read files
+		// (`w`/`W`/`r`/`R`, `s///w`), execute a shell (`e`, `s///e`), or transform
+		// content (`s`/`y`). Codex's most common file read is `sed -n 'M,Np' <file>`,
+		// so recognizing the print-only forms removes a large false-positive class
+		// (#37) while keeping every mutating form scanned (recall-safe, #13 posture).
+		//
+		// A sed script is a single (often quoted) argument that may contain whitespace
+		// (`'1 w out'`); the strings.Fields tokenization above would fragment it and
+		// hide the write command, so re-split quote-aware to keep the script whole.
+		argv := shellSplitArgv(seg)
+		if len(argv) == 0 || argv[0] != "sed" {
+			return false // could not reconcile the head → fail closed
+		}
+		return sedIsRead(argv[1:])
 	default:
 		return readCommandSet[head]
 	}
+}
+
+// sedRegexAddr matches a `/regex/` sed address (honoring `\/` escapes) so its body is
+// not mistaken for a sed command when scanning for write/exec commands.
+var sedRegexAddr = regexp.MustCompile(`/(?:\\.|[^/\\])*/`)
+
+// sedSafeShortFlags are single-letter sed options that take NO argument and cannot
+// edit/write/execute: -n (quiet), -E/-r (extended regex), -s (separate), -z (null
+// data), -u (unbuffered). Any OTHER short flag may take an argument (e.g. GNU
+// `-l N`) or mutate, so it fails closed.
+var sedSafeShortFlags = map[rune]bool{
+	'n': true, 'E': true, 'r': true, 's': true, 'z': true, 'u': true,
+}
+
+// sedSafeLongFlags are argumentless long sed options that are inert.
+var sedSafeLongFlags = map[string]bool{
+	"--quiet": true, "--silent": true, "--regexp-extended": true, "--separate": true,
+	"--null-data": true, "--unbuffered": true, "--posix": true, "--sandbox": true,
+	"--debug": true,
+	// NB: argument-taking long options (e.g. --line-length=N, --expression handled
+	// above) are deliberately absent so they fail closed.
+}
+
+// sedIsRead reports whether a `sed` invocation only reads/prints — never edits in
+// place, writes/reads files, executes a shell, or transforms via `s`/`y`. It is
+// FAIL-CLOSED: any flag not proven inert (unknown short/long option, `-i`/`--in-place`,
+// `-f`/`--file`, or a script with a mutating/executing command) resolves to false
+// (scan), matching the recall-critical codex-read scoping posture (#13/C-003). A
+// false-allow here would wrongly exclude a real command failure, so the parser refuses
+// anything it cannot model — including attached expressions (`-e1wout`) and
+// argument-taking options (`-l N`) that could smuggle a write past a naive bundle scan.
+func sedIsRead(rest []string) bool {
+	var scripts []string
+	for i := 0; i < len(rest); {
+		f := rest[i]
+		switch {
+		case f == "-" || !strings.HasPrefix(f, "-"):
+			// Bare operand: the first is the script (when none gathered via -e); any
+			// later bare operands are input files.
+			if len(scripts) == 0 {
+				scripts = append(scripts, f)
+			}
+			i++
+		case f == "--in-place" || strings.HasPrefix(f, "--in-place"):
+			return false // edits the file in place
+		case f == "--file" || strings.HasPrefix(f, "--file="):
+			return false // external script we cannot inspect
+		case f == "--expression":
+			if i+1 >= len(rest) {
+				return false
+			}
+			scripts = append(scripts, rest[i+1])
+			i += 2
+		case strings.HasPrefix(f, "--expression="):
+			scripts = append(scripts, strings.TrimPrefix(f, "--expression="))
+			i++
+		case strings.HasPrefix(f, "--"):
+			if !sedSafeLongFlags[f] {
+				return false // unknown/argument-taking long flag → fail closed
+			}
+			i++
+		default:
+			// Short-flag bundle, parsed char by char so an attached expression
+			// (`-e1wout`) or an argument-taking flag cannot slip through.
+			bundle := []rune(f[1:])
+			advanced := 1
+			for j := 0; j < len(bundle); j++ {
+				c := bundle[j]
+				if c == 'i' || c == 'f' {
+					return false // in-place edit / external script
+				}
+				if c == 'e' {
+					// `-e` takes the rest of the bundle as its expression, or the next arg.
+					if j+1 < len(bundle) {
+						scripts = append(scripts, string(bundle[j+1:]))
+					} else {
+						if i+1 >= len(rest) {
+							return false
+						}
+						scripts = append(scripts, rest[i+1])
+						advanced = 2
+					}
+					break
+				}
+				if !sedSafeShortFlags[c] {
+					return false // unknown short flag (may take an arg / mutate) → fail closed
+				}
+			}
+			i += advanced
+		}
+	}
+	if len(scripts) == 0 {
+		return false
+	}
+	for _, s := range scripts {
+		if !sedScriptIsPrintOnly(s) {
+			return false
+		}
+	}
+	return true
+}
+
+// sedScriptIsPrintOnly reports whether a sed script contains no command that writes,
+// reads, executes, or transforms — i.e. only prints/extracts. `/regex/` addresses are
+// stripped first so their contents are not read as commands; any of the mutating/
+// executing/transforming command letters remaining (`s y w W r R e a c i`) → false.
+func sedScriptIsPrintOnly(s string) bool {
+	stripped := sedRegexAddr.ReplaceAllString(s, "/")
+	for _, r := range stripped {
+		switch r {
+		case 's', 'y', 'w', 'W', 'r', 'R', 'e', 'a', 'c', 'i':
+			return false
+		}
+	}
+	return true
 }
 
 // shellNormalizeToken removes shell quoting and backslash escaping from a single token
@@ -457,6 +590,62 @@ func shellNormalizeToken(t string) string {
 		}
 	}
 	return b.String()
+}
+
+// shellSplitArgv splits a command segment into argv, honoring single/double quotes and
+// backslash escapes so a quoted argument containing whitespace (e.g. a sed script
+// `'1 w out'`) stays a SINGLE token. It is quote-aware field splitting, NOT a shell
+// parser (C-003): no expansion or substitution — quotes are removed and `\x`→x, the
+// same lossy normalization as shellNormalizeToken. Used where token boundaries matter
+// for safety (sed script inspection).
+func shellSplitArgv(seg string) []string {
+	var args []string
+	var cur strings.Builder
+	started, inSingle, inDouble := false, false, false
+	for i := 0; i < len(seg); i++ {
+		c := seg[i]
+		switch {
+		case inSingle:
+			if c == '\'' {
+				inSingle = false
+			} else {
+				cur.WriteByte(c)
+			}
+			started = true
+		case inDouble:
+			switch {
+			case c == '"':
+				inDouble = false
+			case c == '\\' && i+1 < len(seg):
+				i++
+				cur.WriteByte(seg[i])
+			default:
+				cur.WriteByte(c)
+			}
+			started = true
+		case c == '\'':
+			inSingle, started = true, true
+		case c == '"':
+			inDouble, started = true, true
+		case c == '\\' && i+1 < len(seg):
+			i++
+			cur.WriteByte(seg[i])
+			started = true
+		case c == ' ' || c == '\t' || c == '\n':
+			if started {
+				args = append(args, cur.String())
+				cur.Reset()
+				started = false
+			}
+		default:
+			cur.WriteByte(c)
+			started = true
+		}
+	}
+	if started {
+		args = append(args, cur.String())
+	}
+	return args
 }
 
 // isEnvAssignment reports whether tok is a shell environment assignment (NAME=value)

@@ -59,6 +59,46 @@ func TestClassifyCodexReadCommand(t *testing.T) {
 		{"exec_command", "git diff --textconv file", false},
 		{"exec_command", "git -c diff.external=rm diff", false},
 		{"exec_command", "git diff --no-ext-diff", true},
+		// sed: print-only invocations are reads (#37); any in-place/write/exec/transform
+		// form stays scanned. Codex's dominant file read is `sed -n 'M,Np' file`.
+		{"exec_command", "sed -n '1,260p' file", true},
+		{"exec_command", "sed -n '/pat/p' file", true},
+		{"exec_command", "sed -n '/error/,/done/p' file", true},
+		{"exec_command", "sed '260q' file", true},
+		{"exec_command", "sed -n 5p file", true},
+		{"exec_command", "sed -ne 'p' file", true},
+		{"exec_command", "sed -n -e '1,5p' file", true},
+		{"exec_command", "rg foo | head ; sed -n '1,10p' file", true},
+		// mutating / writing / executing / transforming sed → not a read (scan).
+		{"exec_command", "sed -i s/a/b/ f", false},
+		{"exec_command", "sed -i.bak 's/a/b/' f", false},
+		{"exec_command", "sed --in-place 's/a/b/' f", false},
+		{"exec_command", "sed -ni 'p' f", false},
+		{"exec_command", "sed 's/a/b/w out' f", false},
+		{"exec_command", "sed -e 'w out.txt' f", false},
+		{"exec_command", "sed '/x/w captured.txt' f", false},
+		{"exec_command", "sed '1e rm -rf x' f", false},
+		{"exec_command", "sed 's/a/b/' f", false},
+		{"exec_command", "sed -f script.sed f", false},
+		{"exec_command", "sed -n '1,10p' f > out", false},
+		{"exec_command", "sed -n '1,10p' f && rm f", false},
+		// Fail-closed parsing (Codex review): attached -eSCRIPT and argument-taking
+		// options must not smuggle a write past the classifier.
+		{"exec_command", "sed -n -e1wout log", false}, // attached -e write command
+		{"exec_command", "sed -n -e1s/a/b/ log", false},
+		{"exec_command", "sed -ne1wout log", false},      // bundled -n -e<write>
+		{"exec_command", "sed -n -ep log", true},         // attached -e print
+		{"exec_command", "sed -n -l 10 wout log", false}, // GNU -l takes an arg → fail closed
+		{"exec_command", "sed -n -l 10 '1,5p' f", false}, // unknown/arg option → fail closed even for a read
+		{"exec_command", "sed --help", false},            // unknown long flag → fail closed
+		{"exec_command", "sed -nE '/re/p' f", true},      // -E extended-regex is safe
+		// Quoted scripts with internal whitespace must NOT be fragmented (Codex round 3):
+		// the write command lives inside the quotes and must be detected.
+		{"exec_command", "sed -n '1 wout' log", false},     // '1 wout' = write at line 1
+		{"exec_command", "sed -n '/x/ w out' file", false}, // write command in quoted script
+		{"exec_command", "sed 's/a/b/ ; w f' file", false}, // transform + write
+		{"exec_command", "sed -n '1,5 p' file", true},      // whitespace in a print script is fine
+		{"exec_command", "sed -n '/pat/ p' file", true},    // regex addr + space + print
 		// Newline and single-& (background) are command separators — a mutating
 		// follow-on must not be hidden behind a read head (Codex round-3 review).
 		{"exec_command", "cat x\nrm y", false},
