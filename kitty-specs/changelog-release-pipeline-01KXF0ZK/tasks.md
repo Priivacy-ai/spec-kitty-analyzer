@@ -27,9 +27,9 @@ well-sized package). Tests are included because the spec requires them (NFR-003)
 | T015 | New `release-readiness.yml` — validator on release-control-path PRs + nightly + dispatch; `fetch-depth: 0` | WP03 | | [D] |
 | T016 | Edit `ci.yml` — extend cross-build smoke to also build `./tools/release` for the six targets | WP03 | | [D] |
 | T017 | Local end-to-end verification of the workflows' commands (validate/extract dry runs) | WP03 | | [D] |
-| T018 | Author `RELEASE_CHECKLIST.md` — scoped tag-as-SSOT procedure | WP04 | |
-| T019 | Cross-check the checklist's commands/flags against the shipped `tools/release` CLI | WP04 | |
-| T020 | Link the checklist from README (Limitations/Releases pointer) if a natural spot exists | WP04 | |
+| T018 | Author `RELEASE_CHECKLIST.md` — scoped tag-as-SSOT procedure | WP04 | | [D] |
+| T019 | Cross-check the checklist's commands/flags against the shipped `tools/release` CLI | WP04 | | [D] |
+| T020 | Link the checklist from README (Limitations/Releases pointer) if a natural spot exists | WP04 | | [D] |
 
 ## WP01 — Curated CHANGELOG.md
 
