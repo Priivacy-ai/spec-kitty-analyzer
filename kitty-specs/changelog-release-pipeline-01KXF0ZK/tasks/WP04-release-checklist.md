@@ -85,3 +85,4 @@ Base and merge target `feat/changelog-release-pipeline`; work in the lane from `
 ## Activity Log
 
 - 2026-07-14T01:36:34Z – claude – shell_pid=35910 – Assigned agent via action command
+- 2026-07-14T01:38:28Z – claude – shell_pid=35910 – RELEASE_CHECKLIST.md done; commands+messages cross-checked vs shipped CLI (T019); T020 README pointer skipped (out-of-owned-files, noted)
