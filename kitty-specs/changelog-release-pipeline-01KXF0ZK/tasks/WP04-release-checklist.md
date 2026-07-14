@@ -13,7 +13,7 @@ subtasks:
 - T018
 - T019
 - T020
-agent: claude
+agent: "claude"
 shell_pid: "35910"
 shell_pid_created_at: "1783992983.146948"
 history:
@@ -81,3 +81,7 @@ Base and merge target `feat/changelog-release-pipeline`; work in the lane from `
 
 - Reviewer: run each command in the checklist mentally/really against the shipped tooling; confirm no
   invented flags; confirm the tag-as-SSOT framing (no version-file bump step).
+
+## Activity Log
+
+- 2026-07-14T01:36:34Z – claude – shell_pid=35910 – Assigned agent via action command
