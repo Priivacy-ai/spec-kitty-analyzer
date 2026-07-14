@@ -20,7 +20,7 @@ subtasks:
 - T015
 - T016
 - T017
-agent: claude
+agent: "claude"
 shell_pid: "33423"
 shell_pid_created_at: "1783992639.906285"
 history:
@@ -114,3 +114,7 @@ Base and merge target `feat/changelog-release-pipeline`; work in the lane from `
 - Reviewer: confirm extraction/guard run on **tag builds only**; the body file exists on non-tag
   `workflow_dispatch`; `fetch-depth: 0` present in BOTH workflows; the awk read fails closed; the
   readiness path filter includes `release.yml`; edits stay disjoint from PR #30's action-pin lines.
+
+## Activity Log
+
+- 2026-07-14T01:30:51Z – claude – shell_pid=33423 – Assigned agent via action command
