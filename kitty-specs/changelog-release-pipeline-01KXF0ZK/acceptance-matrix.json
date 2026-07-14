@@ -2,107 +2,107 @@
   "mission_slug": "changelog-release-pipeline-01KXF0ZK",
   "mission_number": "",
   "mission_type": "software-dev",
-  "overall_verdict": "pending",
+  "overall_verdict": "pass",
   "criteria": [
     {
       "criterion_id": "FR-001",
       "description": "Verify FR-001 is satisfied",
-      "proof_type": "automated_test",
-      "evidence": null,
-      "pass_fail": "pending",
-      "verified_by": null,
-      "verified_at": null,
-      "notes": "TODO: replace with a real acceptance criterion"
+      "proof_type": "manual_review",
+      "evidence": "CHANGELOG.md present at repo root (Keep a Changelog): [Unreleased] + [0.3.0]/[0.2.0]/[0.1.1]/[0.1.0] sections + bottom link refs. WP01.",
+      "pass_fail": "pass",
+      "verified_by": "claude (mission driver: per-WP review + acceptance verification)",
+      "verified_at": "2026-07-14T01:41:39Z",
+      "notes": "Verified during WP review and acceptance."
     },
     {
       "criterion_id": "FR-002",
       "description": "Verify FR-002 is satisfied",
-      "proof_type": "automated_test",
-      "evidence": null,
-      "pass_fail": "pending",
-      "verified_by": null,
-      "verified_at": null,
-      "notes": "TODO: replace with a real acceptance criterion"
+      "proof_type": "manual_review",
+      "evidence": "0.3.0 section ported from docs/releases/release-notes-0.3.0.md incl. the breaking version->build.version notice; 0.2.0 from the curated v0.2.0 GitHub Release body. WP01.",
+      "pass_fail": "pass",
+      "verified_by": "claude (mission driver: per-WP review + acceptance verification)",
+      "verified_at": "2026-07-14T01:41:39Z",
+      "notes": "Verified during WP review and acceptance."
     },
     {
       "criterion_id": "FR-003",
       "description": "Verify FR-003 is satisfied",
       "proof_type": "automated_test",
-      "evidence": null,
-      "pass_fail": "pending",
-      "verified_by": null,
-      "verified_at": null,
-      "notes": "TODO: replace with a real acceptance criterion"
+      "evidence": "tools/release extract (WP02). go test TestExtractSection (body + missing-default) passes; e2e dry-run: `extract 0.3.0` prints the section, `extract 9.9.9` prints the default.",
+      "pass_fail": "pass",
+      "verified_by": "claude (mission driver: per-WP review + acceptance verification)",
+      "verified_at": "2026-07-14T01:41:39Z",
+      "notes": "Verified during WP review and acceptance."
     },
     {
       "criterion_id": "FR-004",
       "description": "Verify FR-004 is satisfied",
       "proof_type": "automated_test",
-      "evidence": null,
-      "pass_fail": "pending",
-      "verified_by": null,
-      "verified_at": null,
-      "notes": "TODO: replace with a real acceptance criterion"
+      "evidence": "tools/release validate branch|tag (WP02). go test TestValidateBranchStateAware + TestValidateTag pass; e2e dry-run: branch OK, tag v0.3.0 OK, tag v0.2.0 correctly fails parity (exit 1).",
+      "pass_fail": "pass",
+      "verified_by": "claude (mission driver: per-WP review + acceptance verification)",
+      "verified_at": "2026-07-14T01:41:39Z",
+      "notes": "Verified during WP review and acceptance."
     },
     {
       "criterion_id": "FR-005",
       "description": "Verify FR-005 is satisfied",
       "proof_type": "automated_test",
-      "evidence": null,
-      "pass_fail": "pending",
-      "verified_by": null,
-      "verified_at": null,
-      "notes": "TODO: replace with a real acceptance criterion"
+      "evidence": "Compact-only version grammar + heading classification (WP02). go test TestParseVersion (rejects dotted/`0.3`/`v0.3.0`), TestMalformedHeadingIsError, TestExtractLinkRefsNotHeadings pass.",
+      "pass_fail": "pass",
+      "verified_by": "claude (mission driver: per-WP review + acceptance verification)",
+      "verified_at": "2026-07-14T01:41:39Z",
+      "notes": "Verified during WP review and acceptance."
     },
     {
       "criterion_id": "FR-006",
       "description": "Verify FR-006 is satisfied",
-      "proof_type": "automated_test",
-      "evidence": null,
-      "pass_fail": "pending",
-      "verified_by": null,
-      "verified_at": null,
-      "notes": "TODO: replace with a real acceptance criterion"
+      "proof_type": "manual_review",
+      "evidence": "release.yml: tag-only validate+extract -> body_path: dist/RELEASE_NOTES.md; generate_release_notes removed; RELEASE_NOTES.md always created (empty on non-tag). WP03; YAML valid (T017).",
+      "pass_fail": "pass",
+      "verified_by": "claude (mission driver: per-WP review + acceptance verification)",
+      "verified_at": "2026-07-14T01:41:39Z",
+      "notes": "Verified during WP review and acceptance."
     },
     {
       "criterion_id": "FR-007",
       "description": "Verify FR-007 is satisfied",
-      "proof_type": "automated_test",
-      "evidence": null,
-      "pass_fail": "pending",
-      "verified_by": null,
-      "verified_at": null,
-      "notes": "TODO: replace with a real acceptance criterion"
+      "proof_type": "manual_review",
+      "evidence": "release-readiness.yml: pull_request paths (CHANGELOG.md, tools/release/**, release.yml, release-readiness.yml) + nightly cron + workflow_dispatch tag-mode; fetch-depth:0. WP03.",
+      "pass_fail": "pass",
+      "verified_by": "claude (mission driver: per-WP review + acceptance verification)",
+      "verified_at": "2026-07-14T01:41:39Z",
+      "notes": "Verified during WP review and acceptance."
     },
     {
       "criterion_id": "FR-008",
       "description": "Verify FR-008 is satisfied",
-      "proof_type": "automated_test",
-      "evidence": null,
-      "pass_fail": "pending",
-      "verified_by": null,
-      "verified_at": null,
-      "notes": "TODO: replace with a real acceptance criterion"
+      "proof_type": "manual_review",
+      "evidence": "RELEASE_CHECKLIST.md: scoped tag-as-SSOT runbook. Commands + error messages cross-checked against the shipped tools/release CLI (WP04, T019).",
+      "pass_fail": "pass",
+      "verified_by": "claude (mission driver: per-WP review + acceptance verification)",
+      "verified_at": "2026-07-14T01:41:39Z",
+      "notes": "Verified during WP review and acceptance."
     },
     {
       "criterion_id": "FR-009",
       "description": "Verify FR-009 is satisfied",
       "proof_type": "automated_test",
-      "evidence": null,
-      "pass_fail": "pending",
-      "verified_by": null,
-      "verified_at": null,
-      "notes": "TODO: replace with a real acceptance criterion"
+      "evidence": "Triple-consistency guard in release.yml (WP03). T017 proof: ldflags-stamped binary `version | awk '{print $2}'` = 0.3.0 matches tag & is version-shaped; a dev build yields `dev` and fails closed.",
+      "pass_fail": "pass",
+      "verified_by": "claude (mission driver: per-WP review + acceptance verification)",
+      "verified_at": "2026-07-14T01:41:39Z",
+      "notes": "Verified during WP review and acceptance."
     },
     {
       "criterion_id": "FR-010",
       "description": "Verify FR-010 is satisfied",
-      "proof_type": "automated_test",
-      "evidence": null,
-      "pass_fail": "pending",
-      "verified_by": null,
-      "verified_at": null,
-      "notes": "TODO: replace with a real acceptance criterion"
+      "proof_type": "manual_review",
+      "evidence": "fetch-depth: 0 on the checkout step in both release.yml and release-readiness.yml so `git tag --list` sees the complete tag set. WP03.",
+      "pass_fail": "pass",
+      "verified_by": "claude (mission driver: per-WP review + acceptance verification)",
+      "verified_at": "2026-07-14T01:41:39Z",
+      "notes": "Verified during WP review and acceptance."
     }
   ],
   "negative_invariants": []
