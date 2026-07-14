@@ -64,6 +64,18 @@ func WriteMarkdown(report analyzer.Report, path string) error {
 		b.WriteString("\n")
 	}
 
+	b.WriteString("## Anomalies\n\n")
+	if len(report.Anomalies) == 0 {
+		b.WriteString("No unclassified anomalies detected.\n\n")
+	} else {
+		b.WriteString("_Tier-3 unclassified signals — segregated, never counted as failures. Triage each: promote to a fingerprint, refine a rule, or add its signature to the ignore registry._\n\n")
+		b.WriteString("| Kind | Count | Channel | Seq (first–last) | Example | Signature |\n|---|---:|---|---|---|---|\n")
+		for _, a := range report.Anomalies {
+			fmt.Fprintf(&b, "| `%s` | %d | %s | %d–%d | %s | `%s` |\n", a.Kind, a.Count, a.Channel, a.FirstSeq, a.LastSeq, escapeMD(anomalyExample(a)), a.SignatureHash)
+		}
+		b.WriteString("\n")
+	}
+
 	b.WriteString("## Missions\n\n")
 	if len(report.Missions) == 0 {
 		b.WriteString("No mission-scoped events found.\n\n")
@@ -112,6 +124,18 @@ func WriteHTML(report analyzer.Report, path string) error {
 		b.WriteString("<table><thead><tr><th>Severity</th><th>Count</th><th>ID</th><th>Title</th><th>Recovery</th></tr></thead><tbody>")
 		for _, f := range report.Findings {
 			fmt.Fprintf(&b, "<tr><td class=\"%s\">%s</td><td>%d</td><td><code>%s</code></td><td>%s</td><td>%s</td></tr>", f.Severity, f.Severity, f.Count, html.EscapeString(f.ID), html.EscapeString(f.Title), html.EscapeString(f.Recovery))
+		}
+		b.WriteString("</tbody></table>")
+	}
+
+	b.WriteString("<h2>Anomalies</h2>")
+	if len(report.Anomalies) == 0 {
+		b.WriteString("<p>No unclassified anomalies detected.</p>")
+	} else {
+		b.WriteString(`<p class="muted">Tier-3 unclassified signals — segregated, never counted as failures. Triage each: promote to a fingerprint, refine a rule, or add its signature to the ignore registry.</p>`)
+		b.WriteString("<table><thead><tr><th>Kind</th><th>Count</th><th>Channel</th><th>Seq (first–last)</th><th>Example</th><th>Signature</th></tr></thead><tbody>")
+		for _, a := range report.Anomalies {
+			fmt.Fprintf(&b, "<tr><td><code>%s</code></td><td>%d</td><td>%s</td><td>%d–%d</td><td>%s</td><td><code>%s</code></td></tr>", html.EscapeString(a.Kind), a.Count, html.EscapeString(a.Channel), a.FirstSeq, a.LastSeq, html.EscapeString(anomalyExample(a)), html.EscapeString(a.SignatureHash))
 		}
 		b.WriteString("</tbody></table>")
 	}
@@ -187,6 +211,27 @@ func WritePDF(report analyzer.Report, path string) error {
 			})
 		}
 		drawPDFTable(pdf, []string{"Severity", "Count", "ID", "Title", "Recovery"}, []float64{22, 14, 31, 43, 76}, rows)
+	}
+
+	pdf.Ln(5)
+	drawPDFSection(pdf, "Anomalies")
+	if len(report.Anomalies) == 0 {
+		pdf.SetFont("Helvetica", "", 9)
+		pdf.SetTextColor(23, 32, 42)
+		pdf.MultiCell(0, 5, "No unclassified anomalies detected.", "", "", false)
+	} else {
+		rows := make([][]pdfCell, 0, len(report.Anomalies))
+		for _, a := range report.Anomalies {
+			rows = append(rows, []pdfCell{
+				{Text: a.Kind, Style: "code"},
+				{Text: fmt.Sprint(a.Count), Style: "normal"},
+				{Text: a.Channel, Style: "normal"},
+				{Text: fmt.Sprintf("%d-%d", a.FirstSeq, a.LastSeq), Style: "normal"},
+				{Text: anomalyExample(a), Style: "muted"},
+				{Text: a.SignatureHash[:min(12, len(a.SignatureHash))], Style: "code"},
+			})
+		}
+		drawPDFTable(pdf, []string{"Kind", "Count", "Channel", "Seq", "Example", "Signature"}, []float64{34, 14, 20, 18, 63, 37}, rows)
 	}
 
 	pdf.Ln(5)
@@ -581,6 +626,19 @@ func eventSignal(e analyzer.TimelineEvent) string {
 func escapeMD(s string) string {
 	s = strings.ReplaceAll(s, "|", "\\|")
 	s = strings.ReplaceAll(s, "\n", " ")
+	return s
+}
+
+// anomalyExample returns a bounded first-occurrence snippet for an anomaly group,
+// for the human report's "Example" column.
+func anomalyExample(a analyzer.Anomaly) string {
+	if len(a.Evidence) == 0 {
+		return ""
+	}
+	s := a.Evidence[0].Snippet
+	if len(s) > 80 {
+		s = s[:80] + "…"
+	}
 	return s
 }
 

@@ -92,6 +92,11 @@ version mechanism is reintroduced.
 }
 ```
 
+The human-readable reports (Markdown / HTML / PDF) render a segregated **Anomalies**
+section alongside Findings — kind, count, channel, first/last seq, an example snippet,
+and the signature hash — so a maintainer reading the default report sees the triage
+queue, not just the JSON.
+
 ### Signature hash
 
 `signature_hash = sha256(channel \0 tool \0 kind \0 normalizedToken)`, rendered as the
