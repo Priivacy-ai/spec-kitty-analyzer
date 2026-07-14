@@ -7,6 +7,7 @@
   "mission_number": null,
   "mission_slug": "changelog-release-pipeline-01KXF0ZK",
   "mission_type": "software-dev",
+  "pr_bound": true,
   "purpose_context": "Today the analyzer has no CHANGELOG and ships release notes by hand-pasting them onto the GitHub Release after the fact. This mission mirrors the release-notes mechanism spec-kitty uses on itself (curated CHANGELOG.md, a validator that gates release-metadata PRs, and an extractor that feeds the GitHub Release body), scoped to a single-maintainer Go CLI whose version comes from the git tag. It fulfills charter directive DIR-013 and removes a manual, error-prone step from every release.",
   "purpose_tldr": "Adopt spec-kitty's curated-CHANGELOG release-notes mechanism so analyzer release notes are authored in-repo, validated in CI, and extracted automatically at tag time.",
   "slug": "changelog-release-pipeline-01KXF0ZK",
