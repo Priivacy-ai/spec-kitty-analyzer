@@ -509,3 +509,67 @@ func TestOrdinaryToolErrorIsNotHostBlock(t *testing.T) {
 		t.Fatalf("ordinary tool error must not be a host-block: unresolved=%d", s.Unresolved)
 	}
 }
+
+// An is_error tool_result whose text contains the hook-error phrase but which has
+// NO permission-rule marker (e.g. a script that prints/echoes it) must not count.
+func TestHostBlockRejectsWithoutPermissionMarker(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "quote.jsonl")
+	lines := `{"type":"assistant","timestamp":"2026-07-14T10:00:00.000Z","message":{"role":"assistant","content":[{"type":"tool_use","id":"toolu_read","name":"Read","input":{"file_path":"/tmp/w/README.md"}}]}}
+{"type":"attachment","timestamp":"2026-07-14T10:00:00.500Z","attachment":{"type":"hook_success","hookName":"PreToolUse:Read","toolUseID":"toolu_read","hookEvent":"PreToolUse","content":"ADMIT","stdout":"ADMIT\n","exitCode":0,"command":"/tmp/w/bin/spec-kitty hook run --adapter claude-code --event PreToolUse --governance-context-ref ctx/x"}}
+{"type":"user","timestamp":"2026-07-14T10:00:03.000Z","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"toolu_sh","is_error":true,"content":"PreToolUse:Bash hook error: exit code 1 from my own script"}]}}`
+	if err := os.WriteFile(path, []byte(lines), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if s := AnalyzeFiles([]string{path}, time.Unix(0, 0).UTC()).Summary; s.Unresolved != 0 {
+		t.Fatalf("error output without a permission-rule marker must not count as a host-block: unresolved=%d", s.Unresolved)
+	}
+}
+
+// If a transcript/debug export carries BOTH a real verdict attachment and a
+// host-block tool_result for the same tool_use_id, the action is counted once.
+func TestHostBlockDedupeWithAttachment(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "dupe.jsonl")
+	lines := `{"type":"assistant","timestamp":"2026-07-14T10:00:02.000Z","message":{"role":"assistant","content":[{"type":"tool_use","id":"toolu_push","name":"Bash","input":{"command":"git push origin main"}}]}}
+{"type":"attachment","timestamp":"2026-07-14T10:00:02.200Z","attachment":{"type":"hook_error","hookName":"PreToolUse:Bash","toolUseID":"toolu_push","hookEvent":"PreToolUse","content":"DENY: push to protected branch","stdout":"DENY: push to protected branch\n","exitCode":1,"command":"/tmp/w/bin/spec-kitty hook run --adapter claude-code --event PreToolUse --governance-context-ref ctx/x"}}
+{"type":"user","timestamp":"2026-07-14T10:00:02.400Z","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"toolu_push","is_error":true,"toolDenialKind":"permission-rule","content":"PreToolUse:Bash hook error: hook exited with code 2. No stderr output"}]}}`
+	if err := os.WriteFile(path, []byte(lines), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	s := AnalyzeFiles([]string{path}, time.Unix(0, 0).UTC()).Summary
+	if s.GovernedActions != 1 {
+		t.Fatalf("attachment + host-block for one id must count once: GovernedActions=%d want 1", s.GovernedActions)
+	}
+	if s.Verdicts[VerdictDeny] != 1 || s.Unresolved != 0 {
+		t.Fatalf("the real verdict must win, no unresolved duplicate: verdicts=%v unresolved=%d", s.Verdicts, s.Unresolved)
+	}
+}
+
+// Real-shape tolerance: content as an array of text blocks + whitespace after ':'.
+func TestHostBlockArrayContentAndWhitespace(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "array.jsonl")
+	lines := `{"type":"assistant","timestamp":"2026-07-14T10:00:00.000Z","message":{"role":"assistant","content":[{"type":"tool_use","id":"toolu_read","name":"Read","input":{"file_path":"/tmp/w/README.md"}}]}}
+{"type":"attachment","timestamp":"2026-07-14T10:00:00.500Z","attachment":{"type":"hook_success","hookName":"PreToolUse:Read","toolUseID":"toolu_read","hookEvent":"PreToolUse","content":"ADMIT","stdout":"ADMIT\n","exitCode":0,"command":"/tmp/w/bin/spec-kitty hook run --adapter claude-code --event PreToolUse --governance-context-ref ctx/x"}}
+{"type":"user","timestamp":"2026-07-14T10:00:02.400Z","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"toolu_push","is_error":true,"toolDenialKind":"permission-rule","content":[{"type":"text","text":"PreToolUse: Bash hook error: blocked by host. No stderr output"}]}]}}`
+	if err := os.WriteFile(path, []byte(lines), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	rep := AnalyzeFiles([]string{path}, time.Unix(0, 0).UTC())
+	if rep.Summary.Unresolved != 1 {
+		t.Fatalf("array-content + whitespace host-block must be detected: unresolved=%d", rep.Summary.Unresolved)
+	}
+	var found bool
+	for _, ev := range rep.Events {
+		if ev.Verdict == VerdictUnresolved {
+			found = true
+			if ev.GovernedTool != "Bash" {
+				t.Fatalf("governed tool from 'PreToolUse: Bash' must be Bash, got %q", ev.GovernedTool)
+			}
+		}
+	}
+	if !found {
+		t.Fatal("no UNRESOLVED event from array/whitespace shape")
+	}
+}

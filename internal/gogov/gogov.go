@@ -287,6 +287,9 @@ func extractFromFile(path string) []Event {
 	// attachment (conservative corroboration — see hostBlockEventFrom).
 	var hostBlocks []Event
 	realHook := false
+	// (hookEvent, toolUseID) of real attachments in this file, so a host-block
+	// fallback for a tool call that already has a real verdict is not double-counted.
+	seenHookDecision := map[string]bool{}
 	for i, rawLine := range lines {
 		lineNo := i + 1
 		line := strings.TrimSpace(rawLine)
@@ -321,6 +324,9 @@ func extractFromFile(path string) []Event {
 					hook.NotEnforced = true
 				}
 				realHook = true
+				if hook.ToolUseID != "" {
+					seenHookDecision[hook.HookEvent+"\x00"+hook.ToolUseID] = true
+				}
 				events = append(events, hook)
 			} else if hb, ok := hostBlockEventFrom(obj); ok {
 				hb.SourcePath = path
@@ -352,9 +358,15 @@ func extractFromFile(path string) []Event {
 		}
 	}
 	// Admit held-back host-block denials only when this file also carried a
-	// recognized spec-kitty-go governance attachment (DOG-GOV-05 corroboration).
+	// recognized spec-kitty-go governance attachment (DOG-GOV-05 corroboration),
+	// and never when the same (hookEvent, toolUseID) already produced a real verdict.
 	if realHook {
-		events = append(events, hostBlocks...)
+		for _, hb := range hostBlocks {
+			if hb.ToolUseID != "" && seenHookDecision[hb.HookEvent+"\x00"+hb.ToolUseID] {
+				continue
+			}
+			events = append(events, hb)
+		}
 	}
 	return events
 }
@@ -505,10 +517,39 @@ func hookEventFrom(obj map[string]any) (Event, bool) {
 	return ev, true
 }
 
-// hostBlockRe matches Claude Code's tool_result error text for a PreToolUse hook
-// that blocked the tool via exit 2, e.g. "PreToolUse:Bash hook error: … No stderr
-// output". The captured tool name is the governed tool.
-var hostBlockRe = regexp.MustCompile(`(?i)(PreToolUse|PostToolUse):(\w+) hook error`)
+// hostBlockRe matches Claude Code's tool_result error text for a hook that blocked
+// the tool via exit 2, e.g. "PreToolUse:Bash hook error: … No stderr output". It is
+// anchored to a LINE START ((?m)) so arbitrary prose that merely quotes the phrase
+// mid-text is not matched; whitespace around ':' is tolerated and the captured tool
+// name allows the delimited forms Claude emits. The captures are (hook event, tool).
+var hostBlockRe = regexp.MustCompile(`(?im)^\s*(PreToolUse|PostToolUse)\s*:\s*([A-Za-z0-9_.:-]+)\s+hook error\b`)
+
+// canonicalHookEvent normalizes a case-insensitive match back to Claude's spelling.
+func canonicalHookEvent(s string) string {
+	if strings.EqualFold(s, "PostToolUse") {
+		return "PostToolUse"
+	}
+	return "PreToolUse"
+}
+
+// isPermissionRuleDenial reports whether a tool_result carries Claude's
+// permission-denial marker toolDenialKind == "permission-rule" (the host-block
+// signal @robertDouglass identified). Placement varies across transcript shapes, so
+// the block, the enclosing object, and a toolUseResult sibling are all checked.
+// NOTE: modeled from the DOG-GOV-05 report, not a captured transcript — if a real
+// export places the marker elsewhere, extend the lookup here.
+func isPermissionRuleDenial(block, obj map[string]any) bool {
+	if asString(block["toolDenialKind"]) == "permission-rule" {
+		return true
+	}
+	if asString(obj["toolDenialKind"]) == "permission-rule" {
+		return true
+	}
+	if tur, ok := obj["toolUseResult"].(map[string]any); ok && asString(tur["toolDenialKind"]) == "permission-rule" {
+		return true
+	}
+	return false
+}
 
 // hostBlockEventFrom recognizes a Claude Code host-block denial that carries NO
 // governance hook attachment. When a PreToolUse hook exits 2, Claude blocks the
@@ -542,6 +583,11 @@ func hostBlockEventFrom(obj map[string]any) (Event, bool) {
 		if isErr, _ := block["is_error"].(bool); !isErr {
 			continue
 		}
+		// Require Claude's permission-denial marker so a failing tool whose output
+		// merely contains the hook-error phrase is not counted as a governed action.
+		if !isPermissionRuleDenial(block, obj) {
+			continue
+		}
 		text := toolResultText(block["content"])
 		m := hostBlockRe.FindStringSubmatch(text)
 		if m == nil {
@@ -549,7 +595,7 @@ func hostBlockEventFrom(obj map[string]any) (Event, bool) {
 		}
 		return Event{
 			Category:     CategoryHook,
-			HookEvent:    m[1], // PreToolUse | PostToolUse
+			HookEvent:    canonicalHookEvent(m[1]),
 			GovernedTool: m[2], // Bash | Write | ...
 			ToolUseID:    asString(block["tool_use_id"]),
 			Verdict:      VerdictUnresolved,
