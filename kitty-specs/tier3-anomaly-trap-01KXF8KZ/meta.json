@@ -1,4 +1,16 @@
 {
+  "acceptance_history": [
+    {
+      "acceptance_mode": "pr",
+      "accepted_at": "2026-07-14T03:58:28.068558+00:00",
+      "accepted_by": "kentgale",
+      "accepted_from_commit": "a8ef341ecf44a650f0e380b4bb5e78f3968cb8e2"
+    }
+  ],
+  "acceptance_mode": "pr",
+  "accepted_at": "2026-07-14T03:58:28.068558+00:00",
+  "accepted_by": "kentgale",
+  "accepted_from_commit": "a8ef341ecf44a650f0e380b4bb5e78f3968cb8e2",
   "coordination_branch": "kitty/mission-tier3-anomaly-trap-01KXF8KZ",
   "created_at": "2026-07-14T02:52:09.695329+00:00",
   "flattened": false,
