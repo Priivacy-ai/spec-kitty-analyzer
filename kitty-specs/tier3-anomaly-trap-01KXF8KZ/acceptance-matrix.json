@@ -1,0 +1,128 @@
+{
+  "mission_slug": "tier3-anomaly-trap-01KXF8KZ",
+  "mission_number": "",
+  "mission_type": "software-dev",
+  "overall_verdict": "pass",
+  "criteria": [
+    {
+      "criterion_id": "FR-001",
+      "description": "Tier-3 emits an anomaly on a top-level non-zero exit_status with no Tier-1/Tier-2 finding.",
+      "proof_type": "automated_test",
+      "evidence": "TestAnomalyDetectStructuredExitStatus (detector), TestWiringStructuredExitStatusAnomaly (through Analyze), corpus seq1. anomaly.go detectAnomalies reads obj[\"exit_status\"] top-level-only.",
+      "pass_fail": "pass",
+      "verified_by": "kent (maintainer) via Claude orchestration + adversarial Codex review",
+      "verified_at": "2026-07-14T03:30:00Z",
+      "notes": "Top-level-only read (H3); non-numeric/nested negatives asserted."
+    },
+    {
+      "criterion_id": "FR-002",
+      "description": "Tier-3 emits an anomaly on an unfingerprinted output crash signature (panic:/segmentation fault/core dumped) with no Tier-1/Tier-2 finding.",
+      "proof_type": "automated_test",
+      "evidence": "TestAnomalyDetectCrashSignatures, TestWiringPanicAnomaly, corpus seq2/seq3. Traceback deliberately excluded (already Tier-1/Tier-2).",
+      "pass_fail": "pass",
+      "verified_by": "kent (maintainer) via Claude orchestration + adversarial Codex review",
+      "verified_at": "2026-07-14T03:30:00Z",
+      "notes": "Crash set held to exactly the three tokens."
+    },
+    {
+      "criterion_id": "FR-003",
+      "description": "Residual-only: an anomaly is emitted only when the event produced neither a Tier-1 nor a Tier-2 finding.",
+      "proof_type": "automated_test",
+      "evidence": "TestWiringTier1NoAnomaly, TestWiringTier2NoAnomaly, TestWiringStashGate (existing-failure branch), TestWiringPanicWithErrorTextDefersToTier2 (Go panic with 'runtime error:' -> Tier-2). analyzer.go stashAnomalyCandidates gates on len(Failures)==0.",
+      "pass_fail": "pass",
+      "verified_by": "kent (maintainer) via Claude orchestration + adversarial Codex review",
+      "verified_at": "2026-07-14T03:30:00Z",
+      "notes": "Computed post-gate on finalized failures (H2)."
+    },
+    {
+      "criterion_id": "FR-004",
+      "description": "No anomaly on bare generic words, narrative-channel content, codex-read/file-edit content, or artifact/spec events.",
+      "proof_type": "automated_test",
+      "evidence": "TestAnomalyResidualNegatives (bare words, Traceback), TestWiringNarrativeNoAnomaly, TestWiringStashGate (artifact kind -> none, H1), corpus seq7 narrative panic.",
+      "pass_fail": "pass",
+      "verified_by": "kent (maintainer) via Claude orchestration + adversarial Codex review",
+      "verified_at": "2026-07-14T03:30:00Z",
+      "notes": "Non-artifact gate independent of skipArtifactMessage (H1); scans post-#13 outputCh only."
+    },
+    {
+      "criterion_id": "FR-005",
+      "description": "Each anomaly carries provenance + a channel/tool/kind/token-normalized full-digest signature hash grouping identical shapes across files/runs.",
+      "proof_type": "automated_test",
+      "evidence": "TestSignatureHashGroupsSameShape (64-char, digit-normalized grouping), TestSignatureHashDistinguishesKindChannelTool, TestSignatureHashLongLinesDoNotCollide (full token, not bounded snippet), TestNormalizeTokenCollapses.",
+      "pass_fail": "pass",
+      "verified_by": "kent (maintainer) via Claude orchestration + adversarial Codex review",
+      "verified_at": "2026-07-14T03:30:00Z",
+      "notes": "Hash uses full matched token; snippet bounded for evidence only (Codex WP01 fix)."
+    },
+    {
+      "criterion_id": "FR-006",
+      "description": "An ignore registry of confirmed-benign signature hashes suppresses listed anomalies.",
+      "proof_type": "automated_test",
+      "evidence": "TestBuildAnomaliesIgnoreRegistry (injected hash suppressed). anomaly.go ignoredAnomalySignatures + isIgnoredSignature; promote/refine/ignore loop documented in docs/design/tier3-anomaly-trap.md.",
+      "pass_fail": "pass",
+      "verified_by": "kent (maintainer) via Claude orchestration + adversarial Codex review",
+      "verified_at": "2026-07-14T03:30:00Z",
+      "notes": "Registry keys on the full digest."
+    },
+    {
+      "criterion_id": "FR-007",
+      "description": "Anomalies are segregated: a new top-level anomalies collection, not in findings and not in failure counts, grouped by signature hash with count + first/last, deterministic order.",
+      "proof_type": "automated_test",
+      "evidence": "TestWiringSegregation (not in findings; Summary failure counts 0), TestWiringNormalizeEmptyAnomalies (anomalies:[] not null), TestBuildAnomaliesGroupsAndOrders, TestAnomalyCorpusAdditivityAndGenuineness. Wired at both Analyze + filterReportByMission (M4).",
+      "pass_fail": "pass",
+      "verified_by": "kent (maintainer) via Claude orchestration + adversarial Codex review",
+      "verified_at": "2026-07-14T03:30:00Z",
+      "notes": "Additive Report.Anomalies; no schema-version field (D3)."
+    },
+    {
+      "criterion_id": "FR-008",
+      "description": "The exact Tier-3 trigger set is re-derived against current fingerprint coverage and covers only genuinely-uncovered residual signals.",
+      "proof_type": "analysis",
+      "evidence": "research.md D1 (re-derived vs jsonHasError + genericFailureSignals + Traceback fingerprint). Enforced as a test obligation: TestAnomalyResidualNegatives + corpus prove Tier-1/Tier-2 shapes yield no anomaly.",
+      "pass_fail": "pass",
+      "verified_by": "kent (maintainer) via Claude orchestration + adversarial Codex review",
+      "verified_at": "2026-07-14T03:30:00Z",
+      "notes": "Residual surface = exit_status + panic/segfault/core-dumped."
+    },
+    {
+      "criterion_id": "NFR-001",
+      "description": "Existing confirmed-failure output is unchanged (Tier-3 additive/segregated).",
+      "proof_type": "automated_test",
+      "evidence": "TestAnomalyCorpusAdditivityAndGenuineness: findings exactly {json_error_event@seq4, generic_error@seq5}, Summary.FailureEvents==2 / FailureModes==2; the anomaly events (seq1-3) contribute zero findings.",
+      "pass_fail": "pass",
+      "verified_by": "kent (maintainer) via Claude orchestration + adversarial Codex review",
+      "verified_at": "2026-07-14T03:30:00Z",
+      "notes": "Per-line seq mapping asserted (strengthened per Codex WP03 review)."
+    },
+    {
+      "criterion_id": "NFR-002",
+      "description": "Anomaly detection is deterministic (stable ordering, no map-iteration nondeterminism).",
+      "proof_type": "automated_test",
+      "evidence": "TestSignatureHashDeterministic, TestBuildAnomaliesDeterministicOrder, TestAnomalyCorpusDeterministic. buildAnomalies sorts by (signature_hash, first_seq), evidence by seq.",
+      "pass_fail": "pass",
+      "verified_by": "kent (maintainer) via Claude orchestration + adversarial Codex review",
+      "verified_at": "2026-07-14T03:30:00Z",
+      "notes": ""
+    },
+    {
+      "criterion_id": "NFR-003",
+      "description": "The existing test suite stays green.",
+      "proof_type": "automated_test",
+      "evidence": "go build/vet ./... clean; gofmt -l empty; go test ./... green across all packages (analyzer, cmd, discovery, query, reports, tools/release).",
+      "pass_fail": "pass",
+      "verified_by": "kent (maintainer) via Claude orchestration + adversarial Codex review",
+      "verified_at": "2026-07-14T03:30:00Z",
+      "notes": ""
+    },
+    {
+      "criterion_id": "NFR-004",
+      "description": "On the frozen corpus the anomaly set is dominated by genuine unclassified signals and double-counts zero Tier-1/Tier-2 events.",
+      "proof_type": "automated_test",
+      "evidence": "TestAnomalyCorpusAdditivityAndGenuineness: exactly one anomaly per residual kind at the expected seq; anomaly seqs {1,2,3} disjoint from finding seqs {4,5} (no double-count).",
+      "pass_fail": "pass",
+      "verified_by": "kent (maintainer) via Claude orchestration + adversarial Codex review",
+      "verified_at": "2026-07-14T03:30:00Z",
+      "notes": "Full-corpus manual diff documented in quickstart.md."
+    }
+  ]
+}
