@@ -12,9 +12,10 @@ by the release workflow (see `RELEASE_CHECKLIST.md`).
 
 ## [0.3.0] - 2026-07-14
 
-Build-provenance release: binaries now self-report their **version, commit, and build date**, and
-release builds stamp real values automatically from the git tag (no more hand-edited version
-constant). Ships one **breaking change** to the JSON output schema — see below.
+Build-provenance, plus two new analysis surfaces. Binaries now self-report their **version, commit,
+and build date**, stamped automatically from the git tag at release (no more hand-edited version
+constant) — with one **breaking change** to the JSON schema (see below). This release also adds a
+**Tier-3 unclassified-anomaly** channel and an opt-in **spec-kitty-go governance-activity** view.
 
 ### Added
 
@@ -26,6 +27,18 @@ constant). Ships one **breaking change** to the JSON output schema — see below
   short commit, and UTC build date via linker flags — the version constant no longer has to be
   bumped by hand. Local/dev builds report `dev` / `none` / `unknown`, so a development build is
   never mistaken for a release.
+- **Tier-3 unclassified-anomaly trap (#15).** Reports now include a segregated `anomalies`
+  collection that surfaces output/structured distress signals matching no failure fingerprint — a
+  non-zero structured `exit_status` and the crash signatures `panic:` / `segmentation fault` /
+  `core dumped` — for triage, without ever counting them as confirmed failures or inflating failure
+  totals. Anomalies group by a stable signature hash and can be suppressed via a checked-in ignore
+  registry (promote → refine → ignore). Shown in the JSON, Markdown, HTML, and PDF reports.
+- **spec-kitty-go governance activity (#29).** A new opt-in view — the `go-activity` command, or
+  `--include go` on `analyze` — reconstructs what the spec-kitty-go binary did from harness
+  transcripts: governance-hook verdicts (ADMIT / DENY / DECISION_REQUIRED), direct CLI verb usage,
+  derived ledger activity, and hook latency. A host-blocked action whose typed verdict Claude
+  discarded (hook exit 2) is surfaced as `UNRESOLVED` rather than silently counted as ADMIT, so the
+  report never fabricates an all-admit summary. Contributed by Robert Douglass.
 
 ### Changed
 
