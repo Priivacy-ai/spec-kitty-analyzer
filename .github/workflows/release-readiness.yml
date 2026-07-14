@@ -1,0 +1,69 @@
+name: release readiness
+
+# Gates release-metadata changes: the curated CHANGELOG must stay well-formed, populated,
+# and version-monotonic. Scoped mirror of spec-kitty's release-readiness workflow — no
+# pyproject/uv.lock/metadata checks (this repo's version SSOT is the git tag).
+
+on:
+  pull_request:
+    paths:
+      - CHANGELOG.md
+      - tools/release/**
+      - .github/workflows/release.yml
+      - .github/workflows/release-readiness.yml
+  schedule:
+    # Nightly drift check between releases.
+    - cron: "0 7 * * *"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Optional tag to validate in tag mode (e.g. v0.3.0)"
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-readiness-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    name: validate release metadata
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          # Full tag set so the monotonic-progression check is meaningful.
+          fetch-depth: 0
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Validate
+        shell: bash
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          INPUT_TAG: ${{ github.event.inputs.tag || '' }}
+        run: |
+          set -euo pipefail
+          # validate writes its summary/issues to stderr and exits non-zero on failure;
+          # merge stderr so the message reaches the job summary, and keep pipefail so a
+          # validation failure fails the job.
+          if [[ "${EVENT_NAME}" == "workflow_dispatch" && -n "${INPUT_TAG}" ]]; then
+            if [[ ! "${INPUT_TAG}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+((a|b|rc)[0-9]+)?$ ]]; then
+              echo "::error::tag input must look like vX.Y.Z or vX.Y.Z{a|b|rc}N"; exit 1
+            fi
+            echo "Tag-mode validation for ${INPUT_TAG}"
+            go run ./tools/release validate --mode tag --tag "${INPUT_TAG}" 2>&1 \
+              | tee -a "$GITHUB_STEP_SUMMARY"
+          else
+            echo "Branch-mode release-readiness validation"
+            go run ./tools/release validate --mode branch 2>&1 \
+              | tee -a "$GITHUB_STEP_SUMMARY"
+          fi

@@ -16,6 +16,10 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          # Full history + all tags so `tools/release validate` sees the complete
+          # tag set (monotonic progression check is meaningless on a shallow clone).
+          fetch-depth: 0
 
       - name: Set up Go
         uses: actions/setup-go@v5
@@ -87,7 +91,36 @@ jobs:
           chmod +x dist/install.sh
           (cd dist && shasum -a 256 spec-kitty-analyzer_*.tar.gz spec-kitty-analyzer_*.zip install.sh install.ps1 > checksums.txt)
 
+      - name: Release notes + triple-consistency guard
+        shell: bash
+        run: |
+          set -euo pipefail
+          # body_path (below) is unconditional, so the notes file must ALWAYS exist.
+          # On a non-tag workflow_dispatch run it stays empty and we skip the gates.
+          : > dist/RELEASE_NOTES.md
+          if [[ "${GITHUB_REF_TYPE}" != "tag" ]]; then
+            echo "Non-tag build (ref_type=${GITHUB_REF_TYPE:-unset}); empty release notes, skipping validate/extract/guard"
+            exit 0
+          fi
+          TAG="${GITHUB_REF_NAME}"
+          VER="${TAG#v}"
+          # (1) tag <-> CHANGELOG parity + populated + monotonic (excludes the tag under release).
+          go run ./tools/release validate --mode tag --tag "${TAG}"
+          # (2) binary build.version == tag, read from the `version` command (field 2). Fail closed
+          #     if the read is empty or not version-shaped (guards against output-format drift).
+          bin_ver="$(dist/spec-kitty-analyzer_linux_amd64/spec-kitty-analyzer version | awk '{print $2}')"
+          if [[ ! "${bin_ver}" =~ ^[0-9]+\.[0-9]+\.[0-9]+((a|b|rc)[0-9]+)?$ ]]; then
+            echo "::error::could not read a version-shaped build.version from the binary (got '${bin_ver}')"; exit 1
+          fi
+          if [[ "${bin_ver}" != "${VER}" ]]; then
+            echo "::error::triple-consistency failed: binary build.version (${bin_ver}) != tag (${VER})"; exit 1
+          fi
+          # (3) extract the CHANGELOG section as the GitHub Release body.
+          go run ./tools/release extract "${VER}" > dist/RELEASE_NOTES.md
+          echo "Triple-consistency OK: binary=${bin_ver} == tag=${VER} == CHANGELOG [${VER}]"
+
       - name: Upload release
+        if: github.ref_type == 'tag'
         uses: softprops/action-gh-release@v2
         with:
           files: |
@@ -96,4 +129,4 @@ jobs:
             dist/install.sh
             dist/install.ps1
             dist/checksums.txt
-          generate_release_notes: true
+          body_path: dist/RELEASE_NOTES.md
