@@ -24,7 +24,9 @@ subtasks:
 - T006
 phase: Phase 1 - Foundation
 assignee: ''
-agent: claude
+agent: "claude"
+shell_pid: "67449"
+shell_pid_created_at: "1783999101.17327"
 history:
 - at: '2026-07-14T03:00:00Z'
   actor: system
@@ -144,3 +146,4 @@ Build the **self-contained Tier-3 module** — pure, deterministic, and not yet 
 
 ## Activity Log
 - 2026-07-14T03:00:00Z – system – Prompt created.
+- 2026-07-14T03:18:28Z – claude – shell_pid=67449 – Assigned agent via action command
