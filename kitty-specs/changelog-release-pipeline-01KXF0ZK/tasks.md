@@ -10,10 +10,10 @@ well-sized package). Tests are included because the spec requires them (NFR-003)
 
 | ID | Description | WP | Parallel |
 |----|-------------|----|----------|
-| T001 | Author CHANGELOG.md skeleton (Keep a Changelog header, Unreleased, bottom link refs) | WP01 | |
-| T002 | Seed `[0.3.0]` from docs/releases/release-notes-0.3.0.md (with breaking-change notice) | WP01 | |
-| T003 | Seed `[0.2.0]` from the curated v0.2.0 GitHub Release body | WP01 | |
-| T004 | Seed `[0.1.1]` and `[0.1.0]` from git history (concise) | WP01 | |
+| T001 | Author CHANGELOG.md skeleton (Keep a Changelog header, Unreleased, bottom link refs) | WP01 | | [D] |
+| T002 | Seed `[0.3.0]` from docs/releases/release-notes-0.3.0.md (with breaking-change notice) | WP01 | | [D] |
+| T003 | Seed `[0.2.0]` from the curated v0.2.0 GitHub Release body | WP01 | | [D] |
+| T004 | Seed `[0.1.1]` and `[0.1.0]` from git history (concise) | WP01 | | [D] |
 | T005 | `version.go` — SemVer parse (stable + compact prerelease), compare, canonical, tag↔version parity | WP02 | [P] |
 | T006 | `changelog.go` — heading parse (malformed = error), section extract, populated, top released version | WP02 | [P] |
 | T007 | `git.go` — discover `v*.*.*` tags, exclude-under-release, latest by tuple sort | WP02 | [P] |
