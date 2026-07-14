@@ -100,13 +100,29 @@ func TestRenderersIncludeAnomaliesSection(t *testing.T) {
 		t.Error("html report missing Anomalies section")
 	}
 
-	// Empty case: renders the friendly placeholder, not omitted.
-	empty := filepath.Join(dir, "e.md")
-	if err := WriteMarkdown(analyzer.Report{}, empty); err != nil {
+	// PDF path must render without error/panic (exercises the slice truncation).
+	if err := WritePDF(report, filepath.Join(dir, "r.pdf")); err != nil {
+		t.Fatalf("WritePDF with anomalies: %v", err)
+	}
+
+	// Empty case across all three renderers: friendly placeholder, never omitted/panicked.
+	emptyMD := filepath.Join(dir, "e.md")
+	emptyHTML := filepath.Join(dir, "e.html")
+	if err := WriteMarkdown(analyzer.Report{}, emptyMD); err != nil {
 		t.Fatal(err)
 	}
-	e, _ := os.ReadFile(empty)
-	if !strings.Contains(string(e), "No unclassified anomalies detected.") {
+	if err := WriteHTML(analyzer.Report{}, emptyHTML); err != nil {
+		t.Fatal(err)
+	}
+	if err := WritePDF(analyzer.Report{}, filepath.Join(dir, "e.pdf")); err != nil {
+		t.Fatalf("WritePDF empty: %v", err)
+	}
+	em, _ := os.ReadFile(emptyMD)
+	if !strings.Contains(string(em), "No unclassified anomalies detected.") {
 		t.Error("empty markdown report should show the no-anomalies placeholder")
+	}
+	eh, _ := os.ReadFile(emptyHTML)
+	if !strings.Contains(string(eh), "No unclassified anomalies detected.") {
+		t.Error("empty html report should show the no-anomalies placeholder")
 	}
 }
