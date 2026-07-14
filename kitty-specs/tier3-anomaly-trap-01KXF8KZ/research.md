@@ -61,6 +61,25 @@ Therefore the genuinely-uncovered residue is small:
 
 **Rationale**: `generic_error` (Tier-2) is appended into the same `failures` slice as the Tier-1 rules, so an empty slice is a precise, single-check proxy for "neither Tier-1 nor Tier-2 fired". Routing through the existing `skipArtifactMessage` gate (rather than a new gate) satisfies C-002 and the pre-placed comment in `analyzer.go`.
 
+## Post-plan Codex design review — findings folded (2026-07-14)
+
+Codex (spec-kitty-review profile) reviewed spec+plan+research+data-model+contracts against current code. Verdict **READY-WITH-CHANGES**; 3 HIGH, 4 MEDIUM, 1 LOW. All verified against code and folded:
+
+- **H1 — artifact gate is not blanket (analyzer.go:389).** `skipArtifactMessage` returns *false* (keeps the event) for an artifact-kind event with `Kind != "message"` and no failures, so routing anomalies "through the gate" would not stop an artifact/spec event from minting one. **Resolution:** anomaly emission is additionally gated on `!isArtifactKind(kind)` — anomalies only come from non-artifact (real session output) events. Updates FR-004 / C-002 / IC-02 / Scenario 7 / matrix N10.
+- **H2 — candidate timing (analyzer.go:290,332).** The gate runs *after* classification in `parseFile` and can mutate `event.Failures`. **Resolution:** compute/stash the candidate at the **post-gate append site** in `parseFile` (both the single-object branch ~L290 and the scanner-loop branch ~L335), using the finalized `event.Failures` for the residual-only check and the in-scope top-level `obj` for structured reads. D2/D5 amended below.
+- **H3 — structured read must be bounded + deterministic (json_helpers.go firstJSONNumberByKey).** A recursive unsorted-map walk is nondeterministic and would dig `exit_status` out of content the post-#13 channel model excluded (reintroducing the #13 FP class). **Resolution:** read `exit_status` from the **top-level decoded object only** (`obj["exit_status"]`, numeric, non-zero) — one deterministic key access, channel-respecting. D1 amended.
+- **M1 — embedded-JSON boundary.** `exit_status` inside a re-decoded tool-result string or codex envelope is *not* structurally scanned (top-level-only). **Resolution:** documented as an explicit boundary; recall-safe (a rare nested exit_status is at worst a missed anomaly, never a FP) — see D1.
+- **M2 — multi-signal events.** An event may carry both `exit_status` and a crash sig. **Resolution:** an event stashes a **slice** `anomalyCandidates []anomalyCandidate`; each candidate becomes its own anomaly (its own hash). No priority rule. data-model updated.
+- **M3 — hash tuple + registry key.** **Resolution:** signature hash is over `(channel, tool, kind, normalizedToken)` (adds `tool` per FR-005); the ignore-registry key is the **full-length** hex digest (not a 12-char prefix) so collisions cannot suppress unrelated anomalies. A short prefix may be shown for display only. data-model updated.
+- **M4 — two recompute paths (analyzer.go:69,117).** `buildFindings` runs in both `Analyze` and `filterReportByMission`. **Resolution:** call `buildAnomalies(report.Timeline)` at **both** sites (mission-filtered timeline rebuilds anomalies correctly). IC-05 updated.
+- **L1 — null vs [] (normalize.go).** **Resolution:** `normalizeReport` normalizes `Anomalies` to `[]` (non-`omitempty`), matching the other report slices. IC-05 / data-model updated.
+
+### D1 amendment (H3, M1)
+Structured detection reads `exit_status` **only at the top level** of the decoded event object — a single deterministic key access, non-zero numeric — never a recursive walk. This keeps it deterministic and inside the post-#13 channel discipline (it cannot reach into excluded read/edit content). `exit_status` embedded inside a re-decoded tool-result string or a codex envelope is an explicit non-goal for structured detection (recall-safe).
+
+### D2/D5 amendment (H1, H2)
+The candidate is computed and stashed at the **post-gate append site** in `parseFile`, for kept events only, when **both** `!isArtifactKind(kind)` **and** the finalized `len(event.Failures)==0`. Structured reads use the in-scope top-level `obj` (JSON branches); crash-sig reads use `event.outputCh`. This removes the pre-gate/post-gate staleness and the artifact-event leak.
+
 ## References (current code)
 
 - `internal/analyzer/json_helpers.go` — `jsonHasError`, `firstJSONNumberByKey`, `firstJSONStringByKey`.

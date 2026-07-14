@@ -20,7 +20,7 @@ Report {
 
 | Field | JSON | Type | Meaning |
 |-------|------|------|---------|
-| SignatureHash | `signature_hash` | string | Short hex; the group key. Stable across files/runs for identical shapes. |
+| SignatureHash | `signature_hash` | string | Full 64-char sha256 hex; the group key and the ignore-registry key. Stable across files/runs for identical shapes. A maintainer pastes this value directly into `ignoredAnomalySignatures`. |
 | Kind | `kind` | string | The residual signal kind: `structured_exit_status`, `crash_panic`, `crash_segfault`, `crash_core_dumped`. |
 | Channel | `channel` | string | `output` or `structured`. |
 | Title | `title` | string | Human label, e.g. "Unclassified anomaly: non-zero exit_status". |
@@ -40,27 +40,30 @@ Report {
 
 Mirrors `Finding`/`FindingEvidence` plus `channel`, `kind`, `signature_hash`. Evidence list is capped (e.g. first N occurrences) to bound report size; `Count` still reflects the true total.
 
-## anomalyCandidate (in-memory only — NOT serialized)
+## anomalyCandidates (in-memory only — NOT serialized)
 
-Unexported field on `TimelineEvent`, computed at event construction while `obj` is live:
+Unexported **slice** field on `TimelineEvent` — an event may carry more than one signal, e.g. both `exit_status` and a `panic:` (M2). Stashed at the post-gate append site in `parseFile`, using the in-scope top-level `obj` and the finalized failures:
 
 ```
 type anomalyCandidate struct {
     kind    string   // structured_exit_status | crash_panic | crash_segfault | crash_core_dumped
     channel string   // output | structured
     snippet string   // bounded, scrubbed
-    // signatureHash is derived at aggregation from (channel, kind, normalizedToken)
+    // signatureHash is derived at aggregation from (channel, tool, kind, normalizedToken)
 }
+// on TimelineEvent:
+anomalyCandidates []anomalyCandidate
 ```
 
-- Set only when the event is residual (no Tier-1/Tier-2 finding) and not artifact-suppressed. `nil` otherwise.
+- Populated only when the event is **kept**, `!isArtifactKind(kind)` (H1), and the finalized `len(event.Failures)==0` (residual-only; H2). Empty/nil otherwise.
+- **Structured read is top-level-only**: `obj["exit_status"]` as a direct numeric access, non-zero — never a recursive walk (H3), so it stays deterministic and within the post-#13 channel exclusion. Nested/embedded `exit_status` is a non-goal (M1).
 - `encoding/json` never serializes it (unexported), so the report schema is unaffected (mirrors the `outputCh`/`diagnosticCh` precedent).
 
 ## Signature hash contract (FR-005, NFR-002)
 
-- **Input**: fixed-order tuple `(channel, kind, normalizedToken)`.
+- **Input**: fixed-order tuple `(channel, tool, kind, normalizedToken)` — `tool` added per FR-005 (M3); `tool` is `event.ToolName` or `""`.
 - **normalizedToken**: the matched signal canonicalized so incidental variation collapses — lowercased; runs of digits → a single placeholder; path-like/hex runs → a single placeholder. (E.g. `panic: runtime error: index out of range [5]` and `[9]` normalize to the same token.)
-- **Hash**: `sha256(channel + "\x00" + kind + "\x00" + normalizedToken)`, rendered as a short hex prefix (e.g. first 12 hex chars).
+- **Hash**: `sha256(channel + "\x00" + tool + "\x00" + kind + "\x00" + normalizedToken)`, rendered as the **full 64-char hex digest**. The report's `signature_hash`, the group key, and the ignore-registry key are all this same full digest — no truncated prefix (M3), so a collision cannot suppress an unrelated anomaly and a maintainer can paste the reported value straight into the registry.
 - **Determinism**: no map iteration in the hash input; identical shapes across files/runs → identical hash → one group.
 
 ## Invariants
@@ -70,3 +73,5 @@ type anomalyCandidate struct {
 - **INV-3 (channel discipline)**: candidates are derived only from the post-#13 output/structured channels; narrative, codex-read, and file/edit content never reach the detector.
 - **INV-4 (determinism)**: `buildAnomalies` output is stably ordered — sort by `(signature_hash, first_seq)`; evidence within a group sorted by `seq`.
 - **INV-5 (ignore)**: a candidate whose signature hash is in `ignoredAnomalySignatures` is dropped before grouping.
+- **INV-6 (non-artifact)**: anomalies are never minted from artifact/spec kinds — emission requires `!isArtifactKind(kind)` in addition to residual-only (H1).
+- **INV-7 (normalize)**: `Report.Anomalies` normalizes to `[]` (never `null`) via `normalizeReport`, matching the other report slices (L1).

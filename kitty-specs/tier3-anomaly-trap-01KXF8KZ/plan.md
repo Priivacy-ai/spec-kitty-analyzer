@@ -73,19 +73,19 @@ internal/analyzer/
 
 ### IC-01 — Residual signal detector
 
-- **Purpose**: Pure functions that, given the post-#13 output-channel string and the decoded structured object, detect the tight residual set: (a) a structured `exit_status` with a non-zero value; (b) an output crash signature in `{panic:, segmentation fault, core dumped}`. Returns an anomaly signal `{kind, channel, snippet}` or none. Deliberately excludes everything already covered by Tier-1 (`jsonHasError`, the `Traceback` fingerprint) and Tier-2 (`genericFailureSignals`, which already catches the *text* forms `exit code|exit status|returncode|return code` + N).
+- **Purpose**: Pure functions that, given the post-#13 output-channel string and the decoded structured object, detect the tight residual set and return **zero or more** anomaly signals `{kind, channel, snippet}` (an event may carry both an `exit_status` and a crash sig — M2): (a) a **top-level** structured `exit_status` with a non-zero numeric value; (b) an output crash signature in `{panic:, segmentation fault, core dumped}`. Deliberately excludes everything already covered by Tier-1 (`jsonHasError`, the `Traceback` fingerprint) and Tier-2 (`genericFailureSignals`, which already catches the *text* forms `exit code|exit status|returncode|return code` + N).
 - **Relevant requirements**: FR-001, FR-002, FR-008
-- **Affected surfaces**: `internal/analyzer/anomaly.go` (new); reads structured keys via the existing `firstJSONNumberByKey` helper
+- **Affected surfaces**: `internal/analyzer/anomaly.go` (new). **Structured read is top-level-only** — `obj["exit_status"]` as a direct, type-asserted numeric access — **not** `firstJSONNumberByKey`/any recursive walk (H3: recursion is nondeterministic and would reach into post-#13-excluded read/edit content). Crash sig scans `event.outputCh`.
 - **Sequencing/depends-on**: none (pure, foundational)
-- **Risks**: over-broad triggers re-admit benign chatter (the #4 FP class) — keep the set minimal and re-confirm non-overlap with Tier-1/Tier-2 in tests (FR-008 is a test obligation, not just prose).
+- **Risks**: over-broad triggers re-admit benign chatter (the #4 FP class) — keep the set minimal and re-confirm non-overlap with Tier-1/Tier-2 in tests (FR-008 is a test obligation, not just prose). Embedded/nested `exit_status` (inside a re-decoded tool-result string or codex envelope) is an explicit non-goal (M1; recall-safe).
 
 ### IC-02 — Residual-only emission through the single gate
 
-- **Purpose**: At event construction (where the decoded `obj` and channel strings are in scope), after `classifyFailuresWithChannels`, emit an anomaly candidate **only when** the event produced no findings (`len(failures)==0` ⇒ neither Tier-1 nor Tier-2, since `generic_error` is appended into that same slice) **and** the event is not dropped by `skipArtifactMessage`. Stash the candidate as an unexported field on `TimelineEvent`.
+- **Purpose**: At the **post-gate append site** in `parseFile` (both the single-object JSON branch ~L290 and the scanner-loop branch ~L335), for a **kept** event, stash anomaly candidate(s) **only when both**: (i) `!isArtifactKind(kind)` (H1 — the artifact gate is not blanket; an artifact JSON event with `Kind!="message"` and no failures survives `skipArtifactMessage`, so anomalies must be independently barred from artifact kinds); and (ii) the **finalized** `len(event.Failures)==0` (⇒ neither Tier-1 nor Tier-2, since `generic_error` is appended into that same slice). Computing post-gate uses the finalized failures (H2 — the gate can mutate `event.Failures`). Stash a **slice** `anomalyCandidates` (M2) on `TimelineEvent`.
 - **Relevant requirements**: FR-003, FR-004; C-002, C-003, C-004
-- **Affected surfaces**: `internal/analyzer/analyzer.go` (event construction), `internal/analyzer/types.go` (unexported `anomalyCandidate` field)
+- **Affected surfaces**: `internal/analyzer/analyzer.go` (`parseFile` append sites), `internal/analyzer/types.go` (unexported `anomalyCandidates []anomalyCandidate` field)
 - **Sequencing/depends-on**: IC-01
-- **Risks**: must reuse the existing single suppression gate (no second gate); must consume the post-#13 channel strings only (it already does — the detector never sees narrative/read content).
+- **Risks**: must add candidates at **both** append sites (the single-object branch returns early and doesn't share the loop path); consumes the post-#13 channel strings + top-level `obj` only (never narrative/read content).
 
 ### IC-03 — Anomaly types, provenance, and signature hash
 
@@ -105,11 +105,11 @@ internal/analyzer/
 
 ### IC-05 — Aggregation + segregated report wiring
 
-- **Purpose**: `buildAnomalies(events)` collects stashed candidates, drops ignored hashes, groups by signature hash with count + first/last occurrence, sorts deterministically, and returns `[]Anomaly`. Wire `Report.Anomalies` (additive top-level key) at the existing `buildFindings` call site. Assert (in code + tests) that anomalies never enter `Findings` and never touch `Summary` failure/failure-mode counts. Update the report-contract docs; **no schema-version field** (C-005/D3).
+- **Purpose**: `buildAnomalies(events)` collects stashed candidates, drops ignored hashes, groups by signature hash with count + first/last occurrence, sorts deterministically, and returns `[]Anomaly`. Wire `report.Anomalies = buildAnomalies(report.Timeline)` at **both** `buildFindings` call sites — `Analyze` (analyzer.go:69) **and** `filterReportByMission` (analyzer.go:117) — so mission-filtered reports rebuild anomalies from their filtered timeline (M4). Add `Anomalies` to `normalizeReport` so it marshals as `[]`, not `null` (L1). Assert (in code + tests) that anomalies never enter `Findings` and never touch `Summary` failure/failure-mode counts. Update the report-contract docs; **no schema-version field** (C-005/D3).
 - **Relevant requirements**: FR-007; C-001, C-005
-- **Affected surfaces**: `internal/analyzer/summary.go` (or `anomaly.go`), `internal/analyzer/analyzer.go` (call site), `internal/analyzer/types.go` (`Report.Anomalies`), report-contract docs
+- **Affected surfaces**: `internal/analyzer/summary.go` (or `anomaly.go`), `internal/analyzer/analyzer.go` (both call sites), `internal/analyzer/normalize.go` (`normalizeReport`), `internal/analyzer/types.go` (`Report.Anomalies`), report-contract docs
 - **Sequencing/depends-on**: IC-02, IC-03, IC-04
-- **Risks**: ordering nondeterminism (sort by (hash, first-seq)); ensure empty → `anomalies: []` or omitted consistently.
+- **Risks**: ordering nondeterminism → sort by `(signature_hash, first_seq)`, evidence by `seq`; ensure empty normalizes to `[]` consistently (L1).
 
 ### IC-06 — Golden matrix + frozen-corpus validation
 

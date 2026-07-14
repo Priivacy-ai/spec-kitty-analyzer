@@ -10,6 +10,7 @@ Specification-by-example. Every row is a golden test case (`anomaly_test.go`). "
 | P2 | output contains `panic: runtime error: index out of range [7]`, no exit-status line | none | anomaly `kind=crash_panic`, `channel=output` |
 | P3 | output contains `signal: segmentation fault` | none | anomaly `kind=crash_segfault`, `channel=output` |
 | P4 | output contains `Aborted (core dumped)` | none | anomaly `kind=crash_core_dumped`, `channel=output` |
+| P5 | one event with BOTH top-level `{"exit_status": 3}` and `panic:` in output | none | **two** anomalies from the one event: `structured_exit_status` + `crash_panic` (M2) |
 
 ## Negative — residual-only, no double-count (FR-003)
 
@@ -29,7 +30,7 @@ Specification-by-example. Every row is a golden test case (`anomaly_test.go`). "
 | N7 | `panic:` appears only in the **narrative** channel (assistant prose), not output | **no anomaly** |
 | N8 | `exit_status: 2` / `panic:` appears inside **codex read/inspection** content (excluded by post-#13 channels) | **no anomaly** |
 | N9 | `panic:` appears inside **file-read/code-edit** content (§3a excluded) | **no anomaly** |
-| N10 | artifact/spec event dropped by `skipArtifactMessage` even though it carries `exit_status: 2` | **no anomaly** |
+| N10 | an **artifact-kind** event (`isArtifactKind`) carrying top-level `exit_status: 2`, `Kind != "message"`, no failures (which `skipArtifactMessage` does NOT drop) | **no anomaly** — emission is barred on `!isArtifactKind(kind)` (H1) |
 
 ## Grouping, ignore, determinism (FR-005, FR-006, FR-007, NFR-002)
 
@@ -48,7 +49,7 @@ Specification-by-example. Every row is a golden test case (`anomaly_test.go`). "
   "findings": [ ... ],          // unchanged
   "anomalies": [                // NEW additive top-level key
     {
-      "signature_hash": "9f2a1c4e7b03",
+      "signature_hash": "9f2a1c4e7b03d8a6f1c05e2b7a4419de0c3f88b21a6e7c9d4f0b1a2c3d4e5f607",
       "kind": "crash_panic",
       "channel": "output",
       "title": "Unclassified anomaly: panic in command output",
@@ -63,4 +64,5 @@ Specification-by-example. Every row is a golden test case (`anomaly_test.go`). "
 }
 ```
 - No `version`/schema-version field is added (research.md D3).
-- `anomalies` is `[]`/omitted when there are none.
+- `anomalies` normalizes to `[]` (never `null`) when there are none (L1).
+- `signature_hash` is the full 64-char sha256 digest — paste it directly into `ignoredAnomalySignatures` to suppress (M3).
