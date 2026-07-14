@@ -25,9 +25,14 @@ func TestParseVersion(t *testing.T) {
 	invalid := []string{
 		"0.4.0-rc.1", // dotted prerelease is rejected
 		"0.4.0-rc1",
-		"0.3",     // too few components
-		"v0.3.0",  // leading v is a tag, not a version
-		"0.3.0.1", // too many components
+		"01.2.3",    // leading zero in major
+		"1.02.3",    // leading zero in minor
+		"1.2.03",    // leading zero in patch
+		"0.4.0rc0",  // prerelease number must be positive
+		"0.4.0rc01", // leading zero in prerelease number
+		"0.3",       // too few components
+		"v0.3.0",    // leading v is a tag, not a version
+		"0.3.0.1",   // too many components
 		"1.2.x",
 		"",
 		"Unreleased",
@@ -46,6 +51,9 @@ func TestParseTag(t *testing.T) {
 	}
 	if _, err := ParseTag("0.3.0"); err == nil {
 		t.Error("ParseTag(0.3.0) expected error (missing v)")
+	}
+	if _, err := ParseTag("v01.2.3"); err == nil {
+		t.Error("ParseTag(v01.2.3) expected error (non-canonical version)")
 	}
 }
 

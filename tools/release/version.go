@@ -52,8 +52,15 @@ func ParseVersion(s string) (Version, error) {
 			st = stageRC
 		}
 		num, _ = strconv.Atoi(m[5])
+		if num == 0 {
+			return Version{}, fmt.Errorf("invalid version %q (prerelease number must be positive)", s)
+		}
 	}
-	return Version{Major: major, Minor: minor, Patch: patch, Stage: st, StageNum: num}, nil
+	v := Version{Major: major, Minor: minor, Patch: patch, Stage: st, StageNum: num}
+	if s != v.Canonical() {
+		return Version{}, fmt.Errorf("invalid version %q (must use canonical spelling %q)", s, v.Canonical())
+	}
+	return v, nil
 }
 
 // ParseTag parses a "vX.Y.Z" git tag into a Version.

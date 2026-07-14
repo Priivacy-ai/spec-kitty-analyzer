@@ -98,9 +98,17 @@ func TestIsPopulated(t *testing.T) {
 
 func TestMalformedHeadingIsError(t *testing.T) {
 	bad := []string{
-		"## [0.3] - 2026-07-14\n\n- x\n",    // too few components
-		"## [v0.3.0] - 2026-07-14\n\n- x\n", // leading v
-		"## [draft]\n\n- x\n",               // arbitrary word
+		"## [0.3] - 2026-07-14\n\n- x\n",           // too few components
+		"## [v0.3.0] - 2026-07-14\n\n- x\n",        // leading v
+		"## [draft]\n\n- x\n",                      // arbitrary word
+		"## [0.3.0] 2026-07-14\n\n- x\n",           // missing separator
+		"## [0.3.0] (2026-07-14)\n\n- x\n",         // wrong date syntax
+		"## [0.3.0]: https://example.com\n\n- x\n", // link-ref typo as heading
+		"## [0.3.0]\n\n- x\n",                      // released heading missing date
+		"## [0.3.0] - someday\n\n- x\n",            // released heading malformed date
+		"## [0.3.0] - 2026-99-99\n\n- x\n",         // impossible date
+		"## [Unreleased] - 2026-07-14\n\n- x\n",    // Unreleased must stay undated
+		"## 0.3.0 - 2026-07-14\n\n- x\n",           // missing brackets must not hide a release
 	}
 	for _, text := range bad {
 		if _, err := ParseChangelog(text); err == nil {
@@ -113,5 +121,17 @@ func TestUnreleasedNotReleased(t *testing.T) {
 	sections := mustParse(t, "## [Unreleased]\n\n- wip\n")
 	if _, ok := TopReleasedVersion(sections); ok {
 		t.Error("Unreleased-only changelog must have no released version")
+	}
+}
+
+func TestLinkReferencesDoNotPopulateSection(t *testing.T) {
+	sections := mustParse(t, `# Changelog
+
+## [0.1.0] - 2026-06-20
+
+[0.1.0]: https://example.com/releases/tag/v0.1.0
+`)
+	if sections[0].IsPopulated() {
+		t.Error("link-reference-only section should not count as populated release notes")
 	}
 }

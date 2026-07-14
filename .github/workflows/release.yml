@@ -109,7 +109,7 @@ jobs:
           # (2) binary build.version == tag, read from the `version` command (field 2). Fail closed
           #     if the read is empty or not version-shaped (guards against output-format drift).
           bin_ver="$(dist/spec-kitty-analyzer_linux_amd64/spec-kitty-analyzer version | awk '{print $2}')"
-          if [[ ! "${bin_ver}" =~ ^[0-9]+\.[0-9]+\.[0-9] ]]; then
+          if [[ ! "${bin_ver}" =~ ^[0-9]+\.[0-9]+\.[0-9]+((a|b|rc)[0-9]+)?$ ]]; then
             echo "::error::could not read a version-shaped build.version from the binary (got '${bin_ver}')"; exit 1
           fi
           if [[ "${bin_ver}" != "${VER}" ]]; then
@@ -120,6 +120,7 @@ jobs:
           echo "Triple-consistency OK: binary=${bin_ver} == tag=${VER} == CHANGELOG [${VER}]"
 
       - name: Upload release
+        if: github.ref_type == 'tag'
         uses: softprops/action-gh-release@v2
         with:
           files: |

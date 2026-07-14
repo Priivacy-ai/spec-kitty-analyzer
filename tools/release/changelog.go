@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"regexp"
 	"strings"
+	"time"
 )
 
 // headingRe matches a candidate Keep-a-Changelog H2 heading:
@@ -14,6 +15,7 @@ import (
 // leading "## ". <content> is classified downstream as Unreleased, a valid version,
 // or (a hard error) neither.
 var headingRe = regexp.MustCompile(`^##\s+\[([^\]]+)\]\s*(?:-\s*(.*))?$`)
+var h2HeadingCandidateRe = regexp.MustCompile(`^##\s+`)
 
 // Section is one changelog section: either the Unreleased sentinel or a released
 // version, plus the body lines up to the next heading.
@@ -37,17 +39,26 @@ func ParseChangelog(text string) ([]Section, error) {
 			content := strings.TrimSpace(m[1])
 			sec := Section{Date: strings.TrimSpace(m[2])}
 			if strings.EqualFold(content, "Unreleased") {
+				if sec.Date != "" {
+					return nil, fmt.Errorf("malformed changelog heading %q: Unreleased must not have a date", strings.TrimSpace(line))
+				}
 				sec.IsUnreleased = true
 			} else {
 				v, err := ParseVersion(content)
 				if err != nil {
 					return nil, fmt.Errorf("malformed changelog heading %q: bracket content is neither \"Unreleased\" nor a valid version", strings.TrimSpace(line))
 				}
+				if !validDate(sec.Date) {
+					return nil, fmt.Errorf("malformed changelog heading %q: released versions require a YYYY-MM-DD date", strings.TrimSpace(line))
+				}
 				sec.Version = v
 			}
 			sections = append(sections, sec)
 			cur = len(sections) - 1
 			continue
+		}
+		if h2HeadingCandidateRe.MatchString(line) {
+			return nil, fmt.Errorf("malformed changelog heading %q: expected \"## [Unreleased]\" or \"## [X.Y.Z] - YYYY-MM-DD\"", strings.TrimSpace(line))
 		}
 		if cur >= 0 {
 			sections[cur].Body = append(sections[cur].Body, line)
@@ -69,7 +80,23 @@ func trimBlank(lines []string) []string {
 
 // IsPopulated reports whether the section has at least one non-blank body line.
 func (s Section) IsPopulated() bool {
-	return len(trimBlank(s.Body)) > 0
+	for _, line := range trimBlank(s.Body) {
+		t := strings.TrimSpace(line)
+		if t == "" || isLinkReference(t) {
+			continue
+		}
+		return true
+	}
+	return false
+}
+
+func isLinkReference(line string) bool {
+	return strings.HasPrefix(line, "[") && strings.Contains(line, "]:")
+}
+
+func validDate(s string) bool {
+	t, err := time.Parse("2006-01-02", s)
+	return err == nil && t.Format("2006-01-02") == s
 }
 
 // TopReleasedVersion returns the first (topmost) released section's version.

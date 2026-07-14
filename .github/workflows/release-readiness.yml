@@ -47,14 +47,20 @@ jobs:
 
       - name: Validate
         shell: bash
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          INPUT_TAG: ${{ github.event.inputs.tag || '' }}
         run: |
           set -euo pipefail
           # validate writes its summary/issues to stderr and exits non-zero on failure;
           # merge stderr so the message reaches the job summary, and keep pipefail so a
           # validation failure fails the job.
-          if [[ "${{ github.event_name }}" == "workflow_dispatch" && -n "${{ inputs.tag }}" ]]; then
-            echo "Tag-mode validation for ${{ inputs.tag }}"
-            go run ./tools/release validate --mode tag --tag "${{ inputs.tag }}" 2>&1 \
+          if [[ "${EVENT_NAME}" == "workflow_dispatch" && -n "${INPUT_TAG}" ]]; then
+            if [[ ! "${INPUT_TAG}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+((a|b|rc)[0-9]+)?$ ]]; then
+              echo "::error::tag input must look like vX.Y.Z or vX.Y.Z{a|b|rc}N"; exit 1
+            fi
+            echo "Tag-mode validation for ${INPUT_TAG}"
+            go run ./tools/release validate --mode tag --tag "${INPUT_TAG}" 2>&1 \
               | tee -a "$GITHUB_STEP_SUMMARY"
           else
             echo "Branch-mode release-readiness validation"
