@@ -3,6 +3,7 @@ package gogov
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 )
@@ -404,5 +405,107 @@ func TestAnalyzeFiles_NoActivity(t *testing.T) {
 	}
 	if len(rep.Notes) == 0 {
 		t.Fatalf("expected a note explaining no activity was found")
+	}
+}
+
+// DOG-GOV-05: a Claude Code host-block (hook exit 2) discards the hook stdout and
+// emits only a tool_result ERROR turn — no ADMIT/DENY attachment. The blocked
+// action must surface as UNRESOLVED (not silently dropped, not counted ADMIT), so
+// the action count is right and the summary can never read as all-ADMIT.
+//
+// Fixture modeled from @robertDouglass's DOG-GOV-05 report (real transcript not
+// exported here): a `type:user` tool_result with is_error + toolDenialKind
+// "permission-rule" + the "PreToolUse:Bash hook error … No stderr output" text.
+const hostBlockFixture = `{"type":"assistant","timestamp":"2026-07-14T10:00:00.000Z","message":{"role":"assistant","content":[{"type":"tool_use","id":"toolu_read","name":"Read","input":{"file_path":"/tmp/w/README.md"}}]}}
+{"type":"attachment","timestamp":"2026-07-14T10:00:00.500Z","attachment":{"type":"hook_success","hookName":"PreToolUse:Read","toolUseID":"toolu_read","hookEvent":"PreToolUse","content":"ADMIT","stdout":"ADMIT\n","exitCode":0,"command":"/tmp/w/bin/spec-kitty hook run --adapter claude-code --event PreToolUse --governance-context-ref ctx/x","durationMs":18}}
+{"type":"assistant","timestamp":"2026-07-14T10:00:02.000Z","message":{"role":"assistant","content":[{"type":"tool_use","id":"toolu_push","name":"Bash","input":{"command":"git push origin main"}}]}}
+{"type":"user","timestamp":"2026-07-14T10:00:02.400Z","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"toolu_push","is_error":true,"toolDenialKind":"permission-rule","content":"PreToolUse:Bash hook error: hook exited with code 2. No stderr output"}]}}`
+
+func writeHostBlock(t *testing.T) string {
+	t.Helper()
+	dir := t.TempDir()
+	path := filepath.Join(dir, "hostblock.jsonl")
+	if err := os.WriteFile(path, []byte(hostBlockFixture), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	return path
+}
+
+func TestHostBlockUnresolved_DOGGOV05(t *testing.T) {
+	rep := AnalyzeFiles([]string{writeHostBlock(t)}, time.Unix(0, 0).UTC())
+	s := rep.Summary
+
+	// The host-blocked action must be counted (2 governed actions, not 1).
+	if s.GovernedActions != 2 {
+		t.Fatalf("host-blocked action must be counted: GovernedActions=%d want 2", s.GovernedActions)
+	}
+	if s.Verdicts[VerdictAdmit] != 1 || s.Verdicts[VerdictUnresolved] != 1 {
+		t.Fatalf("verdicts must be 1 ADMIT + 1 UNRESOLVED, got %v", s.Verdicts)
+	}
+	if s.Unresolved != 1 {
+		t.Fatalf("Summary.Unresolved=%d want 1", s.Unresolved)
+	}
+	// It must NOT be miscounted as a denial/decision (verdict is unrecoverable).
+	if s.Denials != 0 || s.DecisionsNeeded != 0 {
+		t.Fatalf("unresolved host-block must not be a denial/decision: denials=%d decisions=%d", s.Denials, s.DecisionsNeeded)
+	}
+
+	// The event carries provenance correlated from the blocked tool call.
+	var hb *Event
+	for i := range rep.Events {
+		if rep.Events[i].Verdict == VerdictUnresolved {
+			hb = &rep.Events[i]
+		}
+	}
+	if hb == nil {
+		t.Fatal("no UNRESOLVED event emitted")
+	}
+	if hb.GovernedTool != "Bash" || hb.HookEvent != "PreToolUse" || hb.ToolUseID != "toolu_push" {
+		t.Fatalf("bad host-block provenance: %+v", hb)
+	}
+	if hb.NotEnforced {
+		t.Fatal("a host-block is enforcement working (tool blocked) — must not be flagged NotEnforced")
+	}
+
+	// The rendered report must NOT claim an all-ADMIT / clean result.
+	out := RenderText(rep)
+	if strings.Contains(out, "all governed actions admitted cleanly") {
+		t.Fatalf("render must not claim all-ADMIT when a host-block is unresolved:\n%s", out)
+	}
+	if !strings.Contains(out, "UNRESOLVED") {
+		t.Fatalf("render must surface the unresolved host-block:\n%s", out)
+	}
+}
+
+// Without a corroborating spec-kitty-go attachment in the same file, a bare
+// PreToolUse hook-error turn cannot be attributed to spec-kitty-go and is not
+// counted (conservative attribution — see hostBlockEventFrom).
+func TestHostBlockRequiresCorroboration(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "lonely.jsonl")
+	lonely := `{"type":"assistant","timestamp":"2026-07-14T10:00:02.000Z","message":{"role":"assistant","content":[{"type":"tool_use","id":"toolu_x","name":"Bash","input":{"command":"git push origin main"}}]}}
+{"type":"user","timestamp":"2026-07-14T10:00:02.400Z","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"toolu_x","is_error":true,"toolDenialKind":"permission-rule","content":"PreToolUse:Bash hook error: hook exited with code 2. No stderr output"}]}}`
+	if err := os.WriteFile(path, []byte(lonely), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	rep := AnalyzeFiles([]string{path}, time.Unix(0, 0).UTC())
+	if rep.Summary.GovernedActions != 0 || rep.Summary.Unresolved != 0 {
+		t.Fatalf("uncorroborated host-block must not be counted: governed=%d unresolved=%d", rep.Summary.GovernedActions, rep.Summary.Unresolved)
+	}
+}
+
+// An ordinary (non-hook) tool_result error must not be mistaken for a host-block.
+func TestOrdinaryToolErrorIsNotHostBlock(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "err.jsonl")
+	lines := `{"type":"assistant","timestamp":"2026-07-14T10:00:00.000Z","message":{"role":"assistant","content":[{"type":"tool_use","id":"toolu_read","name":"Read","input":{"file_path":"/tmp/w/README.md"}}]}}
+{"type":"attachment","timestamp":"2026-07-14T10:00:00.500Z","attachment":{"type":"hook_success","hookName":"PreToolUse:Read","toolUseID":"toolu_read","hookEvent":"PreToolUse","content":"ADMIT","stdout":"ADMIT\n","exitCode":0,"command":"/tmp/w/bin/spec-kitty hook run --adapter claude-code --event PreToolUse --governance-context-ref ctx/x"}}
+{"type":"user","timestamp":"2026-07-14T10:00:03.000Z","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"toolu_read","is_error":true,"content":"cat: /tmp/missing: No such file or directory"}]}}`
+	if err := os.WriteFile(path, []byte(lines), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	s := AnalyzeFiles([]string{path}, time.Unix(0, 0).UTC()).Summary
+	if s.Unresolved != 0 {
+		t.Fatalf("ordinary tool error must not be a host-block: unresolved=%d", s.Unresolved)
 	}
 }

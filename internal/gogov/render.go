@@ -35,14 +35,29 @@ func RenderText(rep Report) string {
 			fmt.Fprintf(&b, "  hook latency:   min %dms  p50 %dms  p95 %dms  max %dms  mean %.1fms  (n=%d)\n",
 				s.Latency.MinMs, s.Latency.P50Ms, s.Latency.P95Ms, s.Latency.MaxMs, s.Latency.MeanMs, s.Latency.Count)
 		}
-		if s.Denials+s.DecisionsNeeded+s.Errors > 0 {
-			fmt.Fprintf(&b, "  attention:      %d denied, %d decision-required, %d errored\n", s.Denials, s.DecisionsNeeded, s.Errors)
+		if s.Denials+s.DecisionsNeeded+s.Errors+s.Unresolved > 0 {
+			fmt.Fprintf(&b, "  attention:      %d denied, %d decision-required, %d errored, %d unresolved\n", s.Denials, s.DecisionsNeeded, s.Errors, s.Unresolved)
 			for _, reason := range s.Reasons {
 				fmt.Fprintf(&b, "                  reason: %s\n", reason)
 			}
 		} else {
 			b.WriteString("  attention:      none (all governed actions admitted cleanly)\n")
 		}
+	}
+
+	// Unresolved host-blocks (DOG-GOV-05): a real block occurred but the transcript
+	// cannot recover the typed verdict, so the summary must NOT read as all-ADMIT.
+	if s.Unresolved > 0 {
+		fmt.Fprintf(&b, "  !! UNRESOLVED: %d host-blocked action(s) whose typed verdict is NOT in the transcript:\n", s.Unresolved)
+		for _, ev := range rep.Events {
+			if ev.Verdict != VerdictUnresolved {
+				continue
+			}
+			fmt.Fprintf(&b, "       %-6s %s\n", ev.GovernedTool, truncate(ev.GovernedInput, 80))
+		}
+		b.WriteString("     (Claude Code blocked the tool via hook exit 2 but discarded the hook stdout, so ADMIT/DENY/\n")
+		b.WriteString("      DECISION_REQUIRED cannot be told apart here. These are NOT admissions; the typed verdict\n")
+		b.WriteString("      survives only in the spec-kitty-go ledger / Claude debug log — correlating those is future work.)\n")
 	}
 
 	// Enforcement gap — the headline risk: a DENY/DECISION_REQUIRED verdict whose
@@ -125,7 +140,7 @@ func renderEventLine(ev Event) string {
 	return fmt.Sprintf("%s  cli   %s %s", ts, ev.Binary, verb)
 }
 
-var verdictOrder = []string{VerdictAdmit, VerdictDeny, VerdictDecisionRequired, VerdictError, VerdictUnknown}
+var verdictOrder = []string{VerdictAdmit, VerdictDeny, VerdictDecisionRequired, VerdictUnresolved, VerdictError, VerdictUnknown}
 
 // formatCounts renders a count map as "a=2, b=1". When order is non-nil, its
 // keys lead (in the given order); any remaining keys follow, count-descending.

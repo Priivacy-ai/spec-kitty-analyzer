@@ -51,6 +51,16 @@ const (
 	VerdictDecisionRequired = "DECISION_REQUIRED"
 	VerdictError            = "ERROR"   // hook failed to run / non-zero exit
 	VerdictUnknown          = "UNKNOWN" // ran, but no recognizable verdict token
+	// VerdictUnresolved marks a governed action that Claude Code host-blocked
+	// (hook exit 2) but whose typed verdict is NOT recoverable from the transcript:
+	// Claude discards the hook stdout on a block and emits only a tool_result error
+	// ("PreToolUse:<Tool> hook error … No stderr output", toolDenialKind:
+	// permission-rule). The action definitely occurred and was blocked (so it is
+	// NOT an ADMIT), but ADMIT/DENY/DECISION_REQUIRED cannot be told apart from the
+	// transcript alone — that survives only in the go ledger / Claude debug log.
+	// Surfacing this (rather than dropping it) stops the analyzer from understating
+	// the action count and fabricating an all-ADMIT summary (issue #29 / DOG-GOV-05).
+	VerdictUnresolved = "UNRESOLVED"
 )
 
 // Event categories.
@@ -112,6 +122,7 @@ type Summary struct {
 	Denials            int            `json:"denials"`
 	DecisionsNeeded    int            `json:"decisions_required"`
 	Errors             int            `json:"errors"`
+	Unresolved         int            `json:"unresolved"`                      // host-blocked; typed verdict unrecoverable from transcript (DOG-GOV-05)
 	UnenforcedVerdicts int            `json:"unenforced_verdicts"`             // DENY/DECISION_REQUIRED whose governed op still executed
 	Reasons            []string       `json:"deny_decision_reasons,omitempty"` // distinct DENY/DECISION reasons
 	PreToolHooks       int            `json:"pre_tool_hooks"`
@@ -270,6 +281,12 @@ func extractFromFile(path string) []Event {
 
 	// Pass 2: extract governance decisions and CLI invocations.
 	var events []Event
+	// Host-block denials (DOG-GOV-05) carry no hook attachment and cannot be tied
+	// to spec-kitty-go from the transcript alone, so they are held back and only
+	// admitted when this file also produced a recognized spec-kitty-go governance
+	// attachment (conservative corroboration — see hostBlockEventFrom).
+	var hostBlocks []Event
+	realHook := false
 	for i, rawLine := range lines {
 		lineNo := i + 1
 		line := strings.TrimSpace(rawLine)
@@ -303,7 +320,19 @@ func extractFromFile(path string) []Event {
 					hook.Executed != nil && *hook.Executed {
 					hook.NotEnforced = true
 				}
+				realHook = true
 				events = append(events, hook)
+			} else if hb, ok := hostBlockEventFrom(obj); ok {
+				hb.SourcePath = path
+				hb.Line = lineNo
+				hb.Timestamp = ts
+				if ref, found := toolUses[hb.ToolUseID]; found && ref != nil {
+					if hb.GovernedTool == "" {
+						hb.GovernedTool = ref.name
+					}
+					hb.GovernedInput = ref.summary
+				}
+				hostBlocks = append(hostBlocks, hb)
 			}
 			for _, cmd := range commandStrings(obj) {
 				for _, ev := range cliEventsFrom(cmd) {
@@ -321,6 +350,11 @@ func extractFromFile(path string) []Event {
 			ev.Line = lineNo
 			events = append(events, ev)
 		}
+	}
+	// Admit held-back host-block denials only when this file also carried a
+	// recognized spec-kitty-go governance attachment (DOG-GOV-05 corroboration).
+	if realHook {
+		events = append(events, hostBlocks...)
 	}
 	return events
 }
@@ -469,6 +503,84 @@ func hookEventFrom(obj map[string]any) (Event, bool) {
 	ev.ContextRef = firstSubmatch(contextRefRe, command)
 	ev.Raw = strings.TrimSpace(command)
 	return ev, true
+}
+
+// hostBlockRe matches Claude Code's tool_result error text for a PreToolUse hook
+// that blocked the tool via exit 2, e.g. "PreToolUse:Bash hook error: … No stderr
+// output". The captured tool name is the governed tool.
+var hostBlockRe = regexp.MustCompile(`(?i)(PreToolUse|PostToolUse):(\w+) hook error`)
+
+// hostBlockEventFrom recognizes a Claude Code host-block denial that carries NO
+// governance hook attachment. When a PreToolUse hook exits 2, Claude blocks the
+// tool and discards the hook stdout, leaving only a tool_result ERROR turn
+// ("PreToolUse:Bash hook error: … No stderr output", toolDenialKind:
+// permission-rule) — there is no ADMIT/DENY stdout to parse. The typed verdict is
+// unrecoverable from the transcript, so this is emitted as an UNRESOLVED governed
+// action rather than dropped (dropping it understates the action count and lets the
+// summary read as all-ADMIT — issue #29 / DOG-GOV-05).
+//
+// Attribution note: the transcript error names only "PreToolUse:<Tool> hook error",
+// not spec-kitty-go, so a host block cannot be tied to spec-kitty-go from the
+// transcript alone. The caller only keeps these for a file that ALSO carries a
+// recognized spec-kitty-go governance attachment, which is a conservative
+// corroboration; definitive attribution + the typed verdict need the ledger/debug
+// correlation tracked separately.
+func hostBlockEventFrom(obj map[string]any) (Event, bool) {
+	msg, ok := obj["message"].(map[string]any)
+	if !ok {
+		return Event{}, false
+	}
+	content, ok := msg["content"].([]any)
+	if !ok {
+		return Event{}, false
+	}
+	for _, item := range content {
+		block, ok := item.(map[string]any)
+		if !ok || asString(block["type"]) != "tool_result" {
+			continue
+		}
+		if isErr, _ := block["is_error"].(bool); !isErr {
+			continue
+		}
+		text := toolResultText(block["content"])
+		m := hostBlockRe.FindStringSubmatch(text)
+		if m == nil {
+			continue
+		}
+		return Event{
+			Category:     CategoryHook,
+			HookEvent:    m[1], // PreToolUse | PostToolUse
+			GovernedTool: m[2], // Bash | Write | ...
+			ToolUseID:    asString(block["tool_use_id"]),
+			Verdict:      VerdictUnresolved,
+			Reason:       "host-blocked (Claude exit 2); typed verdict absent from transcript (hook stdout discarded)",
+			Raw:          truncate(text, 200),
+		}, true
+	}
+	return Event{}, false
+}
+
+// toolResultText flattens a tool_result block's `content` (a string, or an array
+// of {type:"text", text:…} blocks / bare strings) to a single string.
+func toolResultText(v any) string {
+	switch t := v.(type) {
+	case string:
+		return t
+	case []any:
+		var parts []string
+		for _, it := range t {
+			switch b := it.(type) {
+			case map[string]any:
+				if s := asString(b["text"]); s != "" {
+					parts = append(parts, s)
+				}
+			case string:
+				parts = append(parts, b)
+			}
+		}
+		return strings.Join(parts, "\n")
+	}
+	return ""
 }
 
 // isSpecKittyGoHookCommand reports whether a hook command line runs the go
@@ -749,6 +861,8 @@ func buildSummary(events []Event, filesScanned, filesWith int) Summary {
 				s.DecisionsNeeded++
 			case VerdictError:
 				s.Errors++
+			case VerdictUnresolved:
+				s.Unresolved++
 			}
 			if ev.NotEnforced {
 				s.UnenforcedVerdicts++
