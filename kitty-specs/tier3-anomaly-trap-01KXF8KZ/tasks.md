@@ -15,10 +15,10 @@
 | T004 | `Anomaly`/`AnomalyEvidence` types + `Report.Anomalies` + `anomalyCandidates` on `TimelineEvent` | WP01 | | [D] |
 | T005 | `buildAnomalies` aggregation (group by hash, sort, drop ignored) | WP01 | | [D] |
 | T006 | Unit/golden tests for detector, hash, registry, aggregation (test-first) | WP01 | | [D] |
-| T007 | Stash candidates at `parseFile` single-object JSON branch (residual-only + `!isArtifactKind`) | WP02 | |
-| T008 | Stash candidates at `parseFile` scanner-loop branch (obj + text) | WP02 | |
-| T009 | Wire `buildAnomalies` at both recompute sites; normalize `Anomalies` to `[]` | WP02 | |
-| T010 | Integration tests: residual-only, non-artifact, narrative/read exclusion, segregation, both paths (test-first) | WP02 | |
+| T007 | Stash candidates at `parseFile` single-object JSON branch (residual-only + `!isArtifactKind`) | WP02 | | [D] |
+| T008 | Stash candidates at `parseFile` scanner-loop branch (obj + text) | WP02 | | [D] |
+| T009 | Wire `buildAnomalies` at both recompute sites; normalize `Anomalies` to `[]` | WP02 | | [D] |
+| T010 | Integration tests: residual-only, non-artifact, narrative/read exclusion, segregation, both paths (test-first) | WP02 | | [D] |
 | T011 | Assemble frozen corpus fixtures (`testdata/anomaly/**`) | WP03 | |
 | T012 | Corpus additivity test (findings unchanged) + genuine-anomaly assertion | WP03 | |
 | T013 | Report-contract design doc + promote/refine/ignore loop | WP03 | [P] |
