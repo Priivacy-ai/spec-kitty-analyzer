@@ -9,12 +9,12 @@
 
 | ID | Description | WP | Parallel |
 |----|-------------|----|----------|
-| T001 | `anomalyCandidate` + residual signal detector (top-level `exit_status`, crash sigs) | WP01 | |
-| T002 | Signature-hash normalization + full-digest hash over (channel,tool,kind,token) | WP01 | [P] |
-| T003 | Ignore registry (`ignoredAnomalySignatures`) | WP01 | [P] |
-| T004 | `Anomaly`/`AnomalyEvidence` types + `Report.Anomalies` + `anomalyCandidates` on `TimelineEvent` | WP01 | |
-| T005 | `buildAnomalies` aggregation (group by hash, sort, drop ignored) | WP01 | |
-| T006 | Unit/golden tests for detector, hash, registry, aggregation (test-first) | WP01 | |
+| T001 | `anomalyCandidate` + residual signal detector (top-level `exit_status`, crash sigs) | WP01 | | [D] |
+| T002 | Signature-hash normalization + full-digest hash over (channel,tool,kind,token) | WP01 | [D] |
+| T003 | Ignore registry (`ignoredAnomalySignatures`) | WP01 | [D] |
+| T004 | `Anomaly`/`AnomalyEvidence` types + `Report.Anomalies` + `anomalyCandidates` on `TimelineEvent` | WP01 | | [D] |
+| T005 | `buildAnomalies` aggregation (group by hash, sort, drop ignored) | WP01 | | [D] |
+| T006 | Unit/golden tests for detector, hash, registry, aggregation (test-first) | WP01 | | [D] |
 | T007 | Stash candidates at `parseFile` single-object JSON branch (residual-only + `!isArtifactKind`) | WP02 | |
 | T008 | Stash candidates at `parseFile` scanner-loop branch (obj + text) | WP02 | |
 | T009 | Wire `buildAnomalies` at both recompute sites; normalize `Anomalies` to `[]` | WP02 | |
