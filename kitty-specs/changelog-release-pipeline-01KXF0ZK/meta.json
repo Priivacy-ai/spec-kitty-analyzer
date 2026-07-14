@@ -17,7 +17,7 @@
   "flattened": true,
   "friendly_name": "Curated CHANGELOG & Release Notes Pipeline",
   "mission_id": "01KXF0ZKTB5HBQNZCNY6GF3WDQ",
-  "mission_number": null,
+  "mission_number": 3,
   "mission_slug": "changelog-release-pipeline-01KXF0ZK",
   "mission_type": "software-dev",
   "pr_bound": true,

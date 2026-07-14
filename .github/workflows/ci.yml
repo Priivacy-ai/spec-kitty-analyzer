@@ -59,4 +59,6 @@ jobs:
           for target in "${targets[@]}"; do
             read -r os arch <<<"${target}"
             CGO_ENABLED=0 GOOS="${os}" GOARCH="${arch}" go build -trimpath -o "${tmpdir}/spec-kitty-analyzer_${os}_${arch}" ./cmd/spec-kitty-analyzer
+            # Maintainer release tooling must also cross-compile on every target (NFR-002).
+            CGO_ENABLED=0 GOOS="${os}" GOARCH="${arch}" go build -trimpath -o "${tmpdir}/release_${os}_${arch}" ./tools/release
           done
