@@ -30,6 +30,7 @@ type Report struct {
 	Ops         []OpSummary      `json:"ops"`
 	Timeline    []TimelineEvent  `json:"timeline"`
 	Findings    []Finding        `json:"findings"`
+	Anomalies   []Anomaly        `json:"anomalies"`
 	Redactions  map[string]int   `json:"redactions"`
 	Surface     SpecKittySurface `json:"spec_kitty_surface"`
 	Notes       []string         `json:"notes"`
@@ -97,6 +98,13 @@ type TimelineEvent struct {
 	// so they never affect the report JSON schema (NFR-003). In-memory only.
 	outputCh     string
 	diagnosticCh string
+
+	// anomalyCandidates holds the residual Tier-3 signals detected for this event
+	// (issue #15). Populated at the post-gate parseFile append site ONLY for kept,
+	// non-artifact events with no Tier-1/Tier-2 finding; consumed by buildAnomalies.
+	// UNEXPORTED on purpose — encoding/json never serializes it, so it never affects
+	// the report schema (mirrors the outputCh/diagnosticCh precedent). In-memory only.
+	anomalyCandidates []anomalyCandidate
 }
 
 type SlashCommand struct {
@@ -157,6 +165,28 @@ type FindingEvidence struct {
 	SourcePath string `json:"source_path"`
 	Line       int    `json:"line,omitempty"`
 	Text       string `json:"text"`
+}
+
+// Anomaly is a segregated Tier-3 unclassified-anomaly group (issue #15). It mirrors
+// Finding plus the extra provenance fields (channel, kind, signature hash). Anomalies
+// are reported PARALLEL to findings and are NEVER counted in the failure roll-up — a
+// recall signal for triage, not a confirmed failure.
+type Anomaly struct {
+	SignatureHash string            `json:"signature_hash"`
+	Kind          string            `json:"kind"`
+	Channel       string            `json:"channel"`
+	Title         string            `json:"title"`
+	Count         int               `json:"count"`
+	FirstSeq      int               `json:"first_seq"`
+	LastSeq       int               `json:"last_seq"`
+	Evidence      []AnomalyEvidence `json:"evidence"`
+}
+
+type AnomalyEvidence struct {
+	Seq        int    `json:"seq"`
+	SourcePath string `json:"source_path"`
+	Line       int    `json:"line,omitempty"`
+	Snippet    string `json:"snippet"`
 }
 
 type MissionSummary struct {

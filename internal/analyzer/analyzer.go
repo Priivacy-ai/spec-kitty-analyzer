@@ -67,6 +67,7 @@ func Analyze(paths []string) (Report, error) {
 	report.Missions = state.missions()
 	report.Ops = state.opSummaries()
 	report.Findings = buildFindings(report.Timeline, report.Ops)
+	report.Anomalies = buildAnomalies(report.Timeline)
 	report.Summary = buildSummary(report)
 	normalizeReport(&report)
 	return report, nil
@@ -115,6 +116,7 @@ func filterReportByMission(report Report, slug string) Report {
 	report.Missions = state.missions()
 	report.Ops = state.opSummaries()
 	report.Findings = buildFindings(report.Timeline, report.Ops)
+	report.Anomalies = buildAnomalies(report.Timeline)
 	report.Summary = buildSummary(report)
 	report.Notes = append(report.Notes, fmt.Sprintf("filtered to mission %s", slug))
 	normalizeReport(&report)
@@ -288,6 +290,7 @@ func parseFile(path, kind string, data []byte, startTurn int, state *buildState)
 		if obj, ok := decodeJSONObject(bytes.TrimSpace(data)); ok {
 			event := eventFromJSONObjectCtx(path, 1, startTurn+1, obj, ctx)
 			if event.Kind != "" && !skipArtifactMessage(kind, &event) {
+				stashAnomalyCandidates(kind, &event, obj)
 				return []TimelineEvent{event}, startTurn + 1
 			}
 		}
@@ -318,7 +321,9 @@ func parseFile(path, kind string, data []byte, startTurn int, state *buildState)
 		}
 		turn++
 		var event TimelineEvent
+		var lineObj map[string]any
 		if obj, ok := decodeJSONObject(raw); ok {
+			lineObj = obj
 			event = eventFromJSONObjectCtx(path, lineNo, turn, obj, ctx)
 		} else {
 			event = eventFromTextCtx(path, lineNo, turn, string(raw), nil, ctx)
@@ -333,10 +338,25 @@ func parseFile(path, kind string, data []byte, startTurn int, state *buildState)
 			addWorkPackageFrontmatterFailures(&event, string(raw))
 		}
 		if event.Kind != "" && !skipArtifactMessage(kind, &event) {
+			stashAnomalyCandidates(kind, &event, lineObj)
 			events = append(events, event)
 		}
 	}
 	return events, turn
+}
+
+// stashAnomalyCandidates attaches residual Tier-3 anomaly candidates to a KEPT event
+// (issue #15). It runs at the post-gate parseFile append site so it sees the finalized
+// failures, and emits candidates ONLY when the event is non-artifact AND produced no
+// Tier-1/Tier-2 finding (len(Failures)==0 — generic_error is appended into that same
+// slice). The artifact check is independent of skipArtifactMessage because that gate
+// keeps an artifact JSON event with Kind!="message" and no failures. obj is the decoded
+// top-level object (nil for a plain-text line → crash-signature detection only).
+func stashAnomalyCandidates(kind string, event *TimelineEvent, obj map[string]any) {
+	if isArtifactKind(kind) || len(event.Failures) > 0 {
+		return
+	}
+	event.anomalyCandidates = detectAnomalies(obj, event.outputCh)
 }
 
 func eventFromJSONObject(path string, line, turn int, obj map[string]any) TimelineEvent {

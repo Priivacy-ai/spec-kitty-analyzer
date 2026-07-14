@@ -75,4 +75,14 @@ func normalizeReport(report *Report) {
 			report.Findings[i].Evidence = []FindingEvidence{}
 		}
 	}
+	// Tier-3 anomalies are additive and segregated; normalize to [] (never null) to
+	// match the other report slices (issue #15, L1).
+	if report.Anomalies == nil {
+		report.Anomalies = []Anomaly{}
+	}
+	for i := range report.Anomalies {
+		if report.Anomalies[i].Evidence == nil {
+			report.Anomalies[i].Evidence = []AnomalyEvidence{}
+		}
+	}
 }
