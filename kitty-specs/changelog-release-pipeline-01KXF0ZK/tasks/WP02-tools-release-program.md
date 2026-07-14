@@ -135,3 +135,4 @@ Base and merge target `feat/changelog-release-pipeline`; work in the lane from `
 ## Activity Log
 
 - 2026-07-14T01:22:14Z – claude – shell_pid=30091 – Assigned agent via action command
+- 2026-07-14T01:27:55Z – claude – shell_pid=30091 – tools/release program done: extract+validate, stdlib-only, go build/vet/gofmt/test clean, e2e dry-run against real CHANGELOG passed (branch/tag/parity/extract/default)
