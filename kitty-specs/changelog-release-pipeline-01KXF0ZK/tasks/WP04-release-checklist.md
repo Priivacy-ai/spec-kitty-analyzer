@@ -8,7 +8,7 @@ requirement_refs:
 tracker_refs: []
 planning_base_branch: feat/changelog-release-pipeline
 merge_target_branch: feat/changelog-release-pipeline
-branch_strategy: already-confirmed
+branch_strategy: Planning artifacts for this mission were generated on feat/changelog-release-pipeline. During /spec-kitty.implement this WP may branch from a dependency-specific base, but completed changes must merge back into feat/changelog-release-pipeline unless the human explicitly redirects the landing branch.
 subtasks:
 - T018
 - T019
