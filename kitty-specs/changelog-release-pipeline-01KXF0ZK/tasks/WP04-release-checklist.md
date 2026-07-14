@@ -14,8 +14,8 @@ subtasks:
 - T019
 - T020
 agent: "claude"
-shell_pid: "35910"
-shell_pid_created_at: "1783992983.146948"
+shell_pid: "37079"
+shell_pid_created_at: "1783993123.149862"
 history:
 - 2026-07-14 created (tasks phase)
 agent_profile: implementer-ivan
@@ -86,3 +86,4 @@ Base and merge target `feat/changelog-release-pipeline`; work in the lane from `
 
 - 2026-07-14T01:36:34Z – claude – shell_pid=35910 – Assigned agent via action command
 - 2026-07-14T01:38:28Z – claude – shell_pid=35910 – RELEASE_CHECKLIST.md done; commands+messages cross-checked vs shipped CLI (T019); T020 README pointer skipped (out-of-owned-files, noted)
+- 2026-07-14T01:38:46Z – claude – shell_pid=37079 – Started review via action command
