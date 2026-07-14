@@ -118,3 +118,4 @@ Base and merge target `feat/changelog-release-pipeline`; work in the lane from `
 ## Activity Log
 
 - 2026-07-14T01:30:51Z – claude – shell_pid=33423 – Assigned agent via action command
+- 2026-07-14T01:34:42Z – claude – shell_pid=33423 – Workflow wiring done: release.yml (fetch-depth, always-body, validate+guard+extract, body_path, dropped auto-notes), release-readiness.yml (PR/nightly/dispatch), ci.yml cross-build. T017 verified: YAML valid, triple-check binary read proven (0.3.0 match + dev fail-closed)
