@@ -59,6 +59,29 @@ func TestClassifyCodexReadCommand(t *testing.T) {
 		{"exec_command", "git diff --textconv file", false},
 		{"exec_command", "git -c diff.external=rm diff", false},
 		{"exec_command", "git diff --no-ext-diff", true},
+		// sed: print-only invocations are reads (#37); any in-place/write/exec/transform
+		// form stays scanned. Codex's dominant file read is `sed -n 'M,Np' file`.
+		{"exec_command", "sed -n '1,260p' file", true},
+		{"exec_command", "sed -n '/pat/p' file", true},
+		{"exec_command", "sed -n '/error/,/done/p' file", true},
+		{"exec_command", "sed '260q' file", true},
+		{"exec_command", "sed -n 5p file", true},
+		{"exec_command", "sed -ne 'p' file", true},
+		{"exec_command", "sed -n -e '1,5p' file", true},
+		{"exec_command", "rg foo | head ; sed -n '1,10p' file", true},
+		// mutating / writing / executing / transforming sed → not a read (scan).
+		{"exec_command", "sed -i s/a/b/ f", false},
+		{"exec_command", "sed -i.bak 's/a/b/' f", false},
+		{"exec_command", "sed --in-place 's/a/b/' f", false},
+		{"exec_command", "sed -ni 'p' f", false},
+		{"exec_command", "sed 's/a/b/w out' f", false},
+		{"exec_command", "sed -e 'w out.txt' f", false},
+		{"exec_command", "sed '/x/w captured.txt' f", false},
+		{"exec_command", "sed '1e rm -rf x' f", false},
+		{"exec_command", "sed 's/a/b/' f", false},
+		{"exec_command", "sed -f script.sed f", false},
+		{"exec_command", "sed -n '1,10p' f > out", false},
+		{"exec_command", "sed -n '1,10p' f && rm f", false},
 		// Newline and single-& (background) are command separators — a mutating
 		// follow-on must not be hidden behind a read head (Codex round-3 review).
 		{"exec_command", "cat x\nrm y", false},

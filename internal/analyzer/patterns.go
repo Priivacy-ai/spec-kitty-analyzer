@@ -290,9 +290,11 @@ func actionFromCommand(inv CLIInvocation, slash []SlashCommand) string {
 // inclusion only costs a benign extra scan. (FR-003, FR-004, C-003 — no shell parser.)
 
 // readCommandSet is the allowlist of commands whose output is inspection CONTENT,
-// not command-failure output. Kept deliberately minimal (recall over reach). `sed`
-// and `awk` are excluded on purpose: both can mutate in place (`sed -i`) or redirect,
-// so they are not pure reads. `true`/`false` are harmless shell no-ops that appear in
+// not command-failure output. Kept deliberately minimal (recall over reach). `awk` is
+// excluded on purpose (it can mutate/redirect), so it is not a pure read. `sed` is NOT
+// in this bare set either: it is classified by segmentIsRead with option/script
+// inspection (a print-only `sed -n 'M,Np'` is a read; any in-place/write/exec/transform
+// form is scanned — #37). `true`/`false` are harmless shell no-ops that appear in
 // read pipelines (e.g. `rg foo || true`) and produce no content and no real failure.
 // `find` is deliberately NOT in this set: it can mutate (`-delete`, `-exec`) so it is
 // classified by segmentIsRead with option inspection, not by a bare head lookup.
@@ -432,9 +434,97 @@ func segmentIsRead(seg string) bool {
 			}
 		}
 		return true
+	case "sed":
+		// `sed` is a read ONLY when it just prints/extracts. It is excluded from the
+		// bare allowlist because it can edit in place (`-i`), write/read files
+		// (`w`/`W`/`r`/`R`, `s///w`), execute a shell (`e`, `s///e`), or transform
+		// content (`s`/`y`). Codex's most common file read is `sed -n 'M,Np' <file>`,
+		// so recognizing the print-only forms removes a large false-positive class
+		// (#37) while keeping every mutating form scanned (recall-safe, #13 posture).
+		return sedIsRead(rest)
 	default:
 		return readCommandSet[head]
 	}
+}
+
+// sedRegexAddr matches a `/regex/` sed address (honoring `\/` escapes) so its body is
+// not mistaken for a sed command when scanning for write/exec commands.
+var sedRegexAddr = regexp.MustCompile(`/(?:\\.|[^/\\])*/`)
+
+// sedIsRead reports whether a `sed` invocation only reads/prints — never edits in
+// place, writes or reads files, executes a shell, or transforms via `s`/`y`. Any
+// doubt resolves to false (scan), matching the codex-read scoping posture (#13/C-003).
+func sedIsRead(rest []string) bool {
+	var scripts []string
+	for i := 0; i < len(rest); i++ {
+		f := rest[i]
+		switch {
+		case f == "--in-place" || strings.HasPrefix(f, "--in-place"):
+			return false // edits the file in place
+		case f == "--file" || strings.HasPrefix(f, "--file="):
+			return false // script from a file we cannot inspect
+		case f == "-f":
+			return false // script from a file we cannot inspect
+		case f == "--expression":
+			if i+1 < len(rest) {
+				scripts = append(scripts, rest[i+1])
+				i++
+			}
+		case strings.HasPrefix(f, "--expression="):
+			scripts = append(scripts, strings.TrimPrefix(f, "--expression="))
+		case f == "-e":
+			if i+1 < len(rest) {
+				scripts = append(scripts, rest[i+1])
+				i++
+			}
+		case strings.HasPrefix(f, "--"):
+			// other long flags (`--quiet`, `--regexp-extended`, `--null-data`, …) are inert
+		case strings.HasPrefix(f, "-") && f != "-":
+			// short-flag bundle, e.g. `-n`, `-nE`, `-i`, `-i.bak`, `-ne 'script'`
+			flags := f[1:]
+			if strings.ContainsRune(flags, 'i') {
+				return false // `-i` / `-ni` / `-i.bak` — in-place edit
+			}
+			if strings.ContainsRune(flags, 'f') {
+				return false // bundled `-f` — external script
+			}
+			if strings.HasSuffix(flags, "e") && i+1 < len(rest) {
+				// bundled `-e` takes the following arg as the expression
+				scripts = append(scripts, rest[i+1])
+				i++
+			}
+		default:
+			// The first bare operand is the script (when none gathered via -e); any
+			// later bare operands are input files.
+			if len(scripts) == 0 {
+				scripts = append(scripts, f)
+			}
+		}
+	}
+	if len(scripts) == 0 {
+		return false
+	}
+	for _, s := range scripts {
+		if !sedScriptIsPrintOnly(s) {
+			return false
+		}
+	}
+	return true
+}
+
+// sedScriptIsPrintOnly reports whether a sed script contains no command that writes,
+// reads, executes, or transforms — i.e. only prints/extracts. `/regex/` addresses are
+// stripped first so their contents are not read as commands; any of the mutating/
+// executing/transforming command letters remaining (`s y w W r R e a c i`) → false.
+func sedScriptIsPrintOnly(s string) bool {
+	stripped := sedRegexAddr.ReplaceAllString(s, "/")
+	for _, r := range stripped {
+		switch r {
+		case 's', 'y', 'w', 'W', 'r', 'R', 'e', 'a', 'c', 'i':
+			return false
+		}
+	}
+	return true
 }
 
 // shellNormalizeToken removes shell quoting and backslash escaping from a single token
