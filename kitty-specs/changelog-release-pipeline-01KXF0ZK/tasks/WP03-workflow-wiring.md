@@ -120,3 +120,4 @@ Base and merge target `feat/changelog-release-pipeline`; work in the lane from `
 - 2026-07-14T01:30:51Z – claude – shell_pid=33423 – Assigned agent via action command
 - 2026-07-14T01:34:42Z – claude – shell_pid=33423 – Workflow wiring done: release.yml (fetch-depth, always-body, validate+guard+extract, body_path, dropped auto-notes), release-readiness.yml (PR/nightly/dispatch), ci.yml cross-build. T017 verified: YAML valid, triple-check binary read proven (0.3.0 match + dev fail-closed)
 - 2026-07-14T01:35:01Z – claude – shell_pid=35260 – Started review via action command
+- 2026-07-14T01:36:01Z – user – shell_pid=35260 – Review passed: all DoD assertions verified (fetch-depth:0, always-create body, tag-only validate+extract+fail-closed guard, body_path, auto-notes dropped, readiness path filter incl release.yml, ci cross-build tools/release); YAML valid; triple-check binary read proven in T017
