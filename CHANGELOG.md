@@ -47,6 +47,13 @@ constant). Ships one **breaking change** to the JSON output schema — see below
   schema change made while the consumer set is still small; per SemVer it lands in a minor release
   (0.3.0), not a patch.
 
+### Internal
+
+- **Curated CHANGELOG + release-notes pipeline (#20).** This `CHANGELOG.md` is now the source of
+  record for release notes: the `release` workflow extracts the tagged section as the GitHub
+  Release body and asserts binary/tag/changelog consistency before publishing, and a
+  release-readiness check validates changelog metadata on PRs. See `RELEASE_CHECKLIST.md`.
+
 ## [0.2.0] - 2026-07-03
 
 Detection-quality release: sharply fewer false positives, plus new real-failure coverage.
