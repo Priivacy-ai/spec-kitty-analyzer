@@ -48,20 +48,28 @@ tools/release validate --mode tag --tag v0.3.0
   - `--tag vX.Y.Z` (tag mode: optional; defaults to `$GITHUB_REF_NAME` when unset).
 - **Checks** (see data-model validation-rules table):
   - Top released section parses as a valid Version and `IsPopulated`.
-  - branch: version strictly `>` latest `v*.*.*` tag.
-  - tag: `--tag` parity with top released version; version strictly `>` latest tag **excluding
-    `--tag`**.
+  - A bracketed `## [...]` heading that is neither `Unreleased` nor a valid version → hard error.
+  - branch (state-aware): let `V` = top released version, `T` = latest tag. `V > T` OK (release-prep);
+    `V == T` OK (inter-release, routine PR); `V < T` → error.
+  - tag: `--tag` (default `$GITHUB_REF_NAME`) parity with `V`; `V` strictly `>` latest tag
+    **excluding `--tag`** from the set.
 - **Output**: on success, a one-line summary to stderr (`release readiness OK: <version> (mode=...)`);
   on failure, one `- <issue>` line per problem to stderr, each naming the offending value.
 - **Exit codes**: `0` on OK; `1` on any validation failure or missing `CHANGELOG.md`; `2` on usage
   error (bad/missing `--mode`, unparseable `--tag`).
 - **Git**: `validate` runs `git tag --list 'v*.*.*'`. If not in a git work tree, it exits `1` with a
-  clear message (validation cannot assert monotonicity without the tag set).
+  clear message. Callers MUST check out with `fetch-depth: 0` so the tag set is complete (a shallow
+  checkout omitting tags makes the monotonic check unsound).
 
 **Examples**
 ```
+# Release-prep PR (top released 0.3.0 > latest tag v0.2.0):
 $ tools/release validate --mode branch
-release readiness OK: 0.3.0 (mode=branch, latest tag=v0.2.0)          # exit 0
+release readiness OK: 0.3.0 (mode=branch, state=release-prep, latest tag=v0.2.0)   # exit 0
+
+# Routine inter-release PR after v0.3.0 shipped (top released 0.3.0 == latest tag v0.3.0):
+$ tools/release validate --mode branch
+release readiness OK: 0.3.0 (mode=branch, state=inter-release, latest tag=v0.3.0)  # exit 0
 
 $ tools/release validate --mode tag --tag v0.3.0
 release readiness OK: 0.3.0 (mode=tag)                                # exit 0

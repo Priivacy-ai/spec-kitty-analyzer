@@ -23,32 +23,46 @@ used them; we keep group headings as `###`/bold to avoid ambiguity, and require 
 
 ## R2 — Version grammar (stable + prerelease) and ordering
 
-**Decision**: Accept `X.Y.Z` and prerelease `X.Y.Z(a|b|rc)N` plus the dotted `X.Y.Z-rc.N` spelling;
-canonicalize the dotted form to the compact one for comparison. Order by tuple
-`(major, minor, patch, stage_rank, stage_num)` with `stage_rank = {a:0, b:1, rc:2, stable:3}` so
-`0.4.0rc1 < 0.4.0`. This is spec-kitty's `parse_release_version` ranking.
-**Rationale**: Future-proofs prereleases at ~zero cost; matches the reference tool exactly.
-**Alternatives**: Stable-only parsing (rejected per confirmed decision — diverges from spec-kitty,
-needs rework for any future rc).
+**Decision**: Accept `X.Y.Z` and **compact** prerelease `X.Y.Z(a|b|rc)N` only. Do NOT accept the
+dotted `X.Y.Z-rc.N` spelling. Order by tuple `(major, minor, patch, stage_rank, stage_num)` with
+`stage_rank = {a:0, b:1, rc:2, stable:3}` so `0.4.0rc1 < 0.4.0`. This is spec-kitty's
+`parse_release_version` grammar and ranking, verbatim.
+**Rationale**: (post-plan Codex R9) The reference tool's regex accepts compact only; supporting a
+second dotted spelling would force a canonical-equivalence comparison in tag parity for zero benefit
+while prerelease publishing is out of scope. Mirroring compact-only keeps parity a simple string
+compare of canonical forms and stays faithful to the reference.
+**Alternatives**: Accept dotted too and canonicalize (rejected — added ambiguity, no use case);
+stable-only parsing (rejected per confirmed decision — needs rework for any future rc).
 
 ## R3 — Validator check set and modes (scoped)
 
 **Decision**: `validate --mode branch|tag [--tag vX.Y.Z]`:
 - **Common**: locate the top **released** heading in `CHANGELOG.md` (the first `## [X.Y.Z]` that is
   not `[Unreleased]`); assert it is well-formed SemVer and its section is **populated** (has ≥1
-  non-blank line before the next heading).
-- **Branch mode**: assert that version is **strictly greater** than the latest existing
-  `v*.*.*` tag (monotonic). No tag exists for it yet.
+  non-blank line before the next heading). A bracketed `## [...]` heading whose content is neither
+  `Unreleased` nor a valid version is a **hard error** (see R10), never silently skipped.
+- **Branch mode (state-aware monotonicity)**: compare the top released version `V` to the latest
+  existing `v*.*.*` tag `T`:
+  - `V > T` → **release-prep** state: OK (a new version is being prepared).
+  - `V == T` → **inter-release** state: OK, no monotonic failure (routine PRs add to `[Unreleased]`
+    without promoting a version; the top released section legitimately equals the last tag).
+  - `V < T` → **error**: the changelog's top released version is behind the published tags.
 - **Tag mode**: assert `--tag` (or `$GITHUB_REF_NAME`) equals `v` + that top released version
-  (parity); assert monotonic **excluding the current tag** from the existing-tag set (the tag is
-  already pushed when `release.yml` runs, so it must be excluded or the check falsely fails).
+  (parity); assert `V` is **strictly greater** than the latest tag **excluding the tag under
+  release** from the set (the tag is already pushed when `release.yml` runs, so it must be excluded
+  or the check falsely fails).
 
 **Rationale**: This is spec-kitty's `run_validation` minus the file-sync checks that have no
-analogue (pyproject/uv.lock/metadata). The `exclude` parameter on `discover_release_tags`
-(verified in `validate_release.py:495`) is exactly how spec-kitty avoids the self-comparison in tag
-mode — we mirror it.
-**Alternatives**: `>=` in tag mode (rejected — masks a real "forgot to bump" error on branch PRs;
-cleaner to exclude-self and keep strict `>`).
+analogue. **(post-plan Codex R4 — HIGH)** The earlier "branch mode always requires `V > T`" was wrong:
+after `v0.3.0` ships, the top released section is `[0.3.0]` and `T = v0.3.0`, so every routine PR
+adding `[Unreleased]` entries would fail. spec-kitty avoids exactly this — its readiness workflow
+only runs the monotonic check when the version source is actually bumped (`version_bump` scope),
+and downgrades other release-path PRs to a consistency-only check that explicitly does *not* verify
+progression (`release-readiness.yml:106`). Our tag-as-SSOT analogue is the `V==T` inter-release
+carve-out. The `exclude` parameter on `discover_release_tags` (`validate_release.py:495`) is how
+spec-kitty avoids self-comparison in tag mode — mirrored.
+**Alternatives**: `>=` everywhere (rejected — masks a genuine "forgot to bump" on a release-prep PR);
+always-strict `>` (rejected — the finding above; breaks routine PRs).
 
 ## R4 — Triple-consistency at release time (FR-009)
 
@@ -56,18 +70,27 @@ cleaner to exclude-self and keep strict `>`).
 1. `go run ./tools/release validate --mode tag --tag "${GITHUB_REF_NAME}"` — enforces
    **tag == CHANGELOG top section** (+ populated + monotonic-excluding-self). Fail build on error.
 2. `bin_ver="$(dist/spec-kitty-analyzer_linux_amd64/spec-kitty-analyzer version | awk '{print $2}')"`
-   then assert `bin_ver == "${GITHUB_REF_NAME#v}"` — enforces **binary build.version == tag**.
-   (Extends the existing dev-sentinel footgun guard, which already parses this text output.)
+   then **fail closed if `bin_ver` is empty or not version-shaped** (guards against the `version`
+   output format drifting — Codex R7), and assert `bin_ver == "${GITHUB_REF_NAME#v}"` — enforces
+   **binary build.version == tag**. (Extends the existing dev-sentinel footgun guard.)
 3. `go run ./tools/release extract "${GITHUB_REF_NAME#v}" > dist/RELEASE_NOTES.md` and publish via
    `body_path: dist/RELEASE_NOTES.md`.
 
+**Release-body file always exists (Codex R3 — HIGH).** The `action-gh-release` upload step runs
+unconditionally in the current workflow. So `dist/RELEASE_NOTES.md` MUST be created in *all* build
+paths: on a tag build it is the extracted section; on a non-tag `workflow_dispatch` build it is
+created empty (and steps 1–3 above are skipped). Otherwise `body_path` would point at a missing file
+and fail the dispatch run.
+
 Because step 1 guarantees the section exists and matches the tag, and step 2 ties the binary to the
 tag, the three loci (binary `build.version`, tag, CHANGELOG section) are all proven equal before any
-Release is published.
+Release is published. A missing/empty matching section makes step 1 fail and the build stops — there
+is no "publish a default body anyway" path (resolves the spec self-contradiction, Codex HIGH #1).
 
 **Rationale**: `version` prints text `spec-kitty-analyzer <ver> (commit <c>, built <d>)` (verified
 `cmd/spec-kitty-analyzer/main.go:41`); field 2 is `build.version`. No `--json` on `version`, so
-`awk '{print $2}'` is the simplest machine read and matches the existing guard's approach.
+`awk '{print $2}'` is the simplest machine read and matches the existing guard's approach; the
+fail-closed shape check bounds its brittleness.
 **Alternatives**: Parse `analyze --json` `.build.version` (rejected — needs a mission argument and
 `jq`; heavier for identical information). Add a `version --json` flag (rejected — out of scope; a
 separate product change, not release infra).
@@ -88,9 +111,13 @@ brittle; the validator already gates, and a non-fatal default body is a safer fa
 ## R6 — Latest-tag discovery
 
 **Decision**: `git tag --list 'v*.*.*'`, filter to `v` + valid release version, sort by the R2
-tuple descending, take `[0]`. In tag mode pass `exclude = $GITHUB_REF_NAME`.
+tuple descending, take `[0]`. In tag mode pass `exclude = $GITHUB_REF_NAME`. **Both workflows that
+run `validate` MUST check out with `fetch-depth: 0`** (Codex R2 — HIGH) so the local tag set is
+complete; the reference `release-readiness.yml` does this. A shallow checkout can omit tags and make
+the monotonic check meaningless. (The existing `release.yml` uses default checkout depth today — the
+mission adds `fetch-depth: 0` to it; captured as FR-010.)
 **Rationale**: Mirrors `discover_release_tags`; robust to lexical-vs-numeric sort pitfalls (tuple
-sort, not string sort).
+sort, not string sort); complete tag set is a correctness precondition.
 **Alternatives**: `git tag --sort=-version:refname | head -1` (rejected for the validator — git's
 version sort handles prerelease ordering differently than PEP440/our rank; do the tuple sort in Go
 for determinism. The RELEASE_CHECKLIST may still show the git one-liner as a human convenience.)
@@ -119,6 +146,31 @@ still arises it will be a trivial pin-vs-step hunk.
 **Rationale**: Verified the two edit regions do not overlap.
 **Alternatives**: Block on #30 first (unnecessary — disjoint; rebase is cheap).
 
+## R10 — Malformed heading is an error, not a skip (Codex R5 — MEDIUM)
+
+**Decision**: The parser recognizes a **candidate** heading with a broad match `^##\s+\[(.+?)\]`,
+then classifies the bracket content: `Unreleased` (sentinel), a valid version (released section),
+or **neither → hard error** naming the offending heading. A malformed heading like `## [0.3]` or
+`## [v0.3.0]` therefore fails validation loudly instead of being silently skipped (which could let a
+typo'd top heading hide the real top section and make the validator reason about the wrong version).
+Link-reference lines still never match (they lack the `## ` prefix).
+**Rationale**: Silent skip is a correctness trap; a loud error is cheap and safe.
+**Alternatives**: Strict-match-and-skip (rejected — the finding: wrong-section reasoning).
+
+## R11 — Cross-build coverage for tools/release (Codex R6 — MEDIUM)
+
+**Decision**: `tools/release` is pure portable Go (stdlib, no build tags, no cgo, no GOOS-specific
+code), so building it on the runner platform is strong evidence it builds everywhere. To make
+NFR-002 literally verified rather than assumed, extend the existing `ci.yml` "Release cross-build
+smoke" loop to also `go build ./tools/release` for each of the six GOOS/GOARCH targets (it currently
+builds only `./cmd/spec-kitty-analyzer`). Cheap (a second `go build` per target).
+**Rationale**: The plan's original claim ("the six-target smoke covers tools/release") was false as
+written — `go build ./...` only covers the runner platform. Extending the smoke makes it true.
+**Alternatives**: Relax NFR-002 to runner-only (rejected — the extension is trivial and the
+guarantee is worth having); leave as-is (rejected — overclaim).
+
 ## Open questions
 
 None. All Technical Context unknowns resolved; no `[NEEDS CLARIFICATION]` markers remain.
+Post-plan Codex review folded in (R2/R3 grammar & mode semantics, R4 body_path/fetch-depth/awk
+guard, R10 malformed-heading error, R11 cross-build) — see the review log in the mission scratchpad.

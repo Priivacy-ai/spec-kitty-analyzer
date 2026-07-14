@@ -87,8 +87,15 @@ tools/release/                       # NEW — standalone Go program (package ma
 ├── release.yml                      # EDIT — add extractor step + triple-consistency guard;
 │                                    #        set body_path; remove generate_release_notes
 ├── release-readiness.yml            # NEW — validator gate on PRs (metadata paths) + nightly + dispatch
-└── ci.yml                           # unchanged (already runs go test ./... which covers tools/release)
+└── ci.yml                           # EDIT — extend cross-build smoke to also build ./tools/release
+                                     #        (six targets); go test ./... already covers its tests
 ```
+
+> Post-plan Codex review (folded into research R2/R3/R4/R10/R11 and spec FR-004–FR-010) tightened
+> four things the initial plan got wrong or vague: branch-mode monotonicity must be **state-aware**
+> (else routine post-release PRs fail); `fetch-depth: 0` is required in both workflows; the
+> `body_path` file must exist on non-tag runs; and the cross-build smoke must be **extended** to
+> cover `tools/release` (it did not). Details in each artifact.
 
 **Structure Decision**: Single Go module. Release tooling is isolated in a standalone
 `tools/release` `package main` so it (a) is not linked into the shipped `spec-kitty-analyzer`
@@ -119,10 +126,12 @@ existing `go build ./...` / `go test ./...` / cross-build-smoke gates. `CHANGELO
 - **Affected surfaces**: `tools/release/*.go`.
 - **Sequencing/depends-on**: shares the heading grammar with IC-01 (fix grammar in research);
   otherwise independent. Provides the binary consumed by IC-03.
-- **Risks**: Heading-regex false matches (Unreleased, link-ref lines); monotonicity/parity edge
-  cases; prerelease parsing; ensuring cross-compilation on all six targets (`os/exec` git is fine
-  on runners; the program must degrade with a clear error when not in a git repo for `validate`,
-  but `extract` must not need git at all).
+- **Risks**: Heading-regex false matches (Unreleased, link-ref lines) AND the inverse — a malformed
+  `## [...]` heading must **error, not silently skip** (Codex R5); **state-aware** branch
+  monotonicity (`V==T` inter-release must pass — Codex R4); tag-mode self-exclusion + parity;
+  compact-only prerelease grammar (Codex R9); `extract` must never call git; `validate` degrades
+  with a clear error outside a git tree; cross-build smoke must be extended to cover `tools/release`
+  (Codex R6) since `go build ./...` only covers the runner platform.
 
 ### IC-03 — Release + readiness workflow wiring
 
@@ -134,10 +143,11 @@ existing `go build ./...` / `go test ./...` / cross-build-smoke gates. `CHANGELO
 - **Affected surfaces**: `.github/workflows/release.yml` (edit), `.github/workflows/release-readiness.yml` (new).
 - **Sequencing/depends-on**: depends on IC-02 (needs the built commands). Must land on release.yml
   lines disjoint from PR #30.
-- **Risks**: `body_path` must reference a file that always exists on the upload step; extraction
-  and the triple-check must run on tag builds only (not `workflow_dispatch` non-tag), mirroring the
-  existing "don't stamp on dispatch" guard; reading the binary's `build.version` (confirm the
-  `version` command's machine-readable form during research); PR #30 overlap.
+- **Risks**: `body_path` must reference a file that **always exists** — create `RELEASE_NOTES.md`
+  empty on non-tag runs since the upload step is unconditional (Codex R3); extraction + triple-check
+  run on tag builds only; both `release.yml` and `release-readiness.yml` need `fetch-depth: 0` for a
+  complete tag set (Codex R2); the `awk` binary-version read must fail closed on empty/non-version
+  output (Codex R7); readiness path filter must include `release.yml` (Codex R8); PR #30 overlap.
 
 ### IC-04 — Release runbook
 

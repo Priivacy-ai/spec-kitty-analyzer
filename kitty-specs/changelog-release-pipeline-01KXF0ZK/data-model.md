@@ -8,7 +8,8 @@ structure and git tags.
 
 ### Version
 - **Fields**: `Major int`, `Minor int`, `Patch int`, `Stage {alpha|beta|rc|stable}`, `StageNum int`.
-- **Parse from**: `X.Y.Z`, `X.Y.Z(a|b|rc)N`, `X.Y.Z-rc.N` (dotted normalized to compact).
+- **Parse from**: `X.Y.Z`, `X.Y.Z(a|b|rc)N` (compact only; dotted `-rc.N` is rejected — mirrors the
+  reference grammar).
 - **Ordering key**: `(Major, Minor, Patch, stageRank, StageNum)` with
   `stageRank = {alpha:0, beta:1, rc:2, stable:3}`.
 - **Invariants**: a parsed Version round-trips to its canonical string; `Unreleased` is NOT a Version
@@ -48,11 +49,15 @@ tag arg / $GITHUB_REF_NAME ──parsed──▶ Version ───(tag-mode pari
 |------|------|-----------|
 | Top released heading parses as a valid Version | branch + tag | FR-004a, FR-005 |
 | Top released section `IsPopulated` | branch + tag | FR-004b |
-| Top released Version `>` latest tag (strict) | branch | FR-004c |
-| Top released Version `>` latest tag excluding the released tag (strict) | tag | FR-004c |
-| `tag == "v" + topReleasedVersion` (canonical) | tag | FR-004d |
+| Branch state-aware monotonicity: `V>T` OK (release-prep) · `V==T` OK (inter-release) · `V<T` error | branch | FR-004 |
+| `V` `>` latest tag excluding the released tag (strict) | tag | FR-004d |
+| `tag == "v" + topReleasedVersion` (canonical compact) | tag | FR-004c |
 | `Unreleased` / link-ref lines never parsed as a released Version | branch + tag | FR-005 |
+| Bracketed `## [...]` heading that is neither `Unreleased` nor a valid version → **hard error** | branch + tag | FR-005 |
 | Extract returns section body, or default text if absent (exit 0) | (extract) | FR-003 |
+
+Where `V` = top released changelog version, `T` = latest existing `v*.*.*` tag (by the Version
+ordering key). Prerelease forms are **compact only** (`rcN`/`aN`/`bN`); dotted `-rc.N` is not a Version.
 
 ## State transitions
 
