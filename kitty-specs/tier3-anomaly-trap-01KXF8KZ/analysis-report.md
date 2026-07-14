@@ -4,7 +4,7 @@ artifact_type: spec-kitty.analysis-report
 command: /spec-kitty.analyze
 mission_slug: tier3-anomaly-trap-01KXF8KZ
 mission_id: 01KXF8KZJVXDMA2R74SED1AERG
-generated_at: '2026-07-14T03:17:49.934446+00:00'
+generated_at: '2026-07-14T03:36:58.542017+00:00'
 analyzer_agent: unknown
 input_artifacts:
   spec.md:
@@ -15,16 +15,16 @@ input_artifacts:
     sha256: ad6979b1fbc4f4e47f06d26c35cbb877d72b75711c2fa782385ed0fe72d52c3c
   tasks.md:
     path: /Users/kentgale/repos/spec-kitty-analyzer/kitty-specs/tier3-anomaly-trap-01KXF8KZ/tasks.md
-    sha256: 8abe82c2d2059bf5a4680e3a5a4325a56dba7ff4923814e2fa3e6cfb751255b3
+    sha256: a13a1384a1ede3815c7900db0131bfbf0bc3227426e8cb8e80cef421fc0348cf
   charter:
     path: /Users/kentgale/repos/spec-kitty-analyzer/.kittify/charter/charter.md
     sha256: a49f13c3c550402d5aa4e6ce47ae05342f2f898fed1e102cace7e3de1a132211
 verdict: ready
 issue_counts:
   high: 0
+  critical: 0
   medium: 0
   low: 2
-  critical: 0
   info: 0
 findings:
 - id: L1
