@@ -1,16 +1,16 @@
 {
-  "event_count": 24,
-  "last_event_id": "01KXF4EAW1E2GP5F0KWX9B2PQY",
-  "materialized_at": "2026-07-14T01:39:10.337628+00:00",
-  "mission_number": "",
+  "event_count": 25,
+  "last_event_id": "01KXF4TS6KAJW39XNRDR60MG0Q",
+  "materialized_at": "2026-07-14T01:45:58.227230+00:00",
+  "mission_number": "3",
   "mission_slug": "changelog-release-pipeline-01KXF0ZK",
   "mission_type": "software-dev",
   "summary": {
-    "approved": 4,
+    "approved": 3,
     "blocked": 0,
     "canceled": 0,
     "claimed": 0,
-    "done": 0,
+    "done": 1,
     "for_review": 0,
     "in_progress": 0,
     "in_review": 0,
@@ -18,11 +18,11 @@
   },
   "work_packages": {
     "WP01": {
-      "actor": "user",
+      "actor": "merge",
       "force_count": 0,
-      "lane": "approved",
-      "last_event_id": "01KXF3D9WVCP3V9EFWYKK650V6",
-      "last_transition_at": "2026-07-14T01:21:07.995803+00:00"
+      "lane": "done",
+      "last_event_id": "01KXF4TS6KAJW39XNRDR60MG0Q",
+      "last_transition_at": "2026-07-14T01:45:58.227230+00:00"
     },
     "WP02": {
       "actor": "user",
