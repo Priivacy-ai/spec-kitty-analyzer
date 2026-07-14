@@ -147,3 +147,5 @@ Build the **self-contained Tier-3 module** — pure, deterministic, and not yet 
 ## Activity Log
 - 2026-07-14T03:00:00Z – system – Prompt created.
 - 2026-07-14T03:18:28Z – claude – shell_pid=67449 – Assigned agent via action command
+- 2026-07-14T03:24:02Z – claude – shell_pid=67449 – Moved to for_review
+- 2026-07-14T03:30:27Z – user – shell_pid=67449 – Moved to in_progress
