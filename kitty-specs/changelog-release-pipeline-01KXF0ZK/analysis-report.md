@@ -4,7 +4,7 @@ artifact_type: spec-kitty.analysis-report
 command: /spec-kitty.analyze
 mission_slug: changelog-release-pipeline-01KXF0ZK
 mission_id: 01KXF0ZKTB5HBQNZCNY6GF3WDQ
-generated_at: '2026-07-14T01:15:19.416892+00:00'
+generated_at: '2026-07-14T01:22:05.911919+00:00'
 analyzer_agent: unknown
 input_artifacts:
   spec.md:
@@ -15,16 +15,16 @@ input_artifacts:
     sha256: 62374bac753c44aef0cad2e9325bc240c38815141eb4d8e47826c5c46607296d
   tasks.md:
     path: /Users/kentgale/repos/spec-kitty-analyzer/kitty-specs/changelog-release-pipeline-01KXF0ZK/tasks.md
-    sha256: 3d0caa411c85cfb718fc5356e0ffe682fec4c2d31f2e6563917ad6bbfbd2a0b1
+    sha256: c90bb13f47fdf13a37cce01dd4fca6d8b4ef7947ca73e111f2a4d9495163b3e1
   charter:
     path: /Users/kentgale/repos/spec-kitty-analyzer/.kittify/charter/charter.md
     sha256: a49f13c3c550402d5aa4e6ce47ae05342f2f898fed1e102cace7e3de1a132211
 verdict: ready
 issue_counts:
+  high: 0
   low: 2
   medium: 0
   critical: 0
-  high: 0
   info: 0
 findings:
 - id: C1
