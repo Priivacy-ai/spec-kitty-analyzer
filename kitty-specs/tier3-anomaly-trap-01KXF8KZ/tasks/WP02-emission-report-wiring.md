@@ -21,9 +21,9 @@ subtasks:
 - T010
 phase: Phase 2 - Wiring
 assignee: ''
-agent: "claude"
-shell_pid: "74957"
-shell_pid_created_at: "1784000216.556733"
+agent: "codex"
+shell_pid: "78873"
+shell_pid_created_at: "1784000844.968028"
 history:
 - at: '2026-07-14T03:00:00Z'
   actor: system
@@ -130,3 +130,6 @@ Make Tier-3 live: stash candidates at the **post-gate append sites** in `parseFi
 ## Activity Log
 - 2026-07-14T03:00:00Z – system – Prompt created.
 - 2026-07-14T03:37:09Z – claude – shell_pid=74957 – Assigned agent via action command
+- 2026-07-14T03:47:30Z – claude – shell_pid=74957 – Moved to for_review
+- 2026-07-14T03:47:34Z – codex – shell_pid=78873 – Started review via action command
+- 2026-07-14T03:47:42Z – user – shell_pid=78873 – Codex code review APPROVE, no findings; added .json-path test per non-blocking note. go build/vet/gofmt/test green.
