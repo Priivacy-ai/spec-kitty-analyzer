@@ -14,6 +14,8 @@ subtasks:
 - T019
 - T020
 agent: claude
+shell_pid: "35910"
+shell_pid_created_at: "1783992983.146948"
 history:
 - 2026-07-14 created (tasks phase)
 agent_profile: implementer-ivan
