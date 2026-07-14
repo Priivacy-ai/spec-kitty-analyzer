@@ -1,0 +1,15 @@
+{
+  "coordination_branch": "kitty/mission-tier3-anomaly-trap-01KXF8KZ",
+  "created_at": "2026-07-14T02:52:09.695329+00:00",
+  "flattened": false,
+  "friendly_name": "Tier-3 Unclassified-Anomaly Trap",
+  "mission_id": "01KXF8KZJVXDMA2R74SED1AERG",
+  "mission_number": null,
+  "mission_slug": "tier3-anomaly-trap-01KXF8KZ",
+  "mission_type": "software-dev",
+  "purpose_context": "The analyzer's precision work (#4/#11) made it structurally blind to failure modes no fingerprint anticipates. This mission adds a deterministic, residual-only Tier-3 trap that captures genuinely-unclassified output/structured distress signals, reports them separately from confirmed findings, and feeds a promote/refine/ignore self-improvement loop — recall insurance that never lowers precision.",
+  "purpose_tldr": "Add a segregated Tier-3 unclassified-anomaly channel so the analyzer surfaces novel failure modes without inflating confirmed-failure counts.",
+  "slug": "tier3-anomaly-trap-01KXF8KZ",
+  "target_branch": "feat/tier3-anomaly-trap",
+  "topology": "coord"
+}
