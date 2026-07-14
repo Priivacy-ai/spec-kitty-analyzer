@@ -9,12 +9,17 @@ tracker_refs: []
 planning_base_branch: feat/changelog-release-pipeline
 merge_target_branch: feat/changelog-release-pipeline
 branch_strategy: Planning artifacts for this mission were generated on feat/changelog-release-pipeline. During /spec-kitty.implement this WP may branch from a dependency-specific base, but completed changes must merge back into feat/changelog-release-pipeline unless the human explicitly redirects the landing branch.
+base_branch: kitty/mission-changelog-release-pipeline-01KXF0ZK
+base_commit: 11cdeeabd5448de7f1f1130569903d32504eabf3
+created_at: '2026-07-14T01:15:40.804332+00:00'
 subtasks:
 - T001
 - T002
 - T003
 - T004
 agent: claude
+shell_pid: '27715'
+shell_pid_created_at: '1783991737.315316'
 history:
 - 2026-07-14 created (tasks phase)
 agent_profile: implementer-ivan

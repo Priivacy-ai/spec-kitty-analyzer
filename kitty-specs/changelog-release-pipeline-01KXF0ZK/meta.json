@@ -11,5 +11,7 @@
   "purpose_tldr": "Adopt spec-kitty's curated-CHANGELOG release-notes mechanism so analyzer release notes are authored in-repo, validated in CI, and extracted automatically at tag time.",
   "slug": "changelog-release-pipeline-01KXF0ZK",
   "target_branch": "feat/changelog-release-pipeline",
-  "topology": "single_branch"
+  "topology": "single_branch",
+  "vcs": "git",
+  "vcs_locked_at": "2026-07-14T01:15:40.562457+00:00"
 }
