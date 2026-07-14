@@ -92,6 +92,13 @@ func TestClassifyCodexReadCommand(t *testing.T) {
 		{"exec_command", "sed -n -l 10 '1,5p' f", false}, // unknown/arg option → fail closed even for a read
 		{"exec_command", "sed --help", false},            // unknown long flag → fail closed
 		{"exec_command", "sed -nE '/re/p' f", true},      // -E extended-regex is safe
+		// Quoted scripts with internal whitespace must NOT be fragmented (Codex round 3):
+		// the write command lives inside the quotes and must be detected.
+		{"exec_command", "sed -n '1 wout' log", false},     // '1 wout' = write at line 1
+		{"exec_command", "sed -n '/x/ w out' file", false}, // write command in quoted script
+		{"exec_command", "sed 's/a/b/ ; w f' file", false}, // transform + write
+		{"exec_command", "sed -n '1,5 p' file", true},      // whitespace in a print script is fine
+		{"exec_command", "sed -n '/pat/ p' file", true},    // regex addr + space + print
 		// Newline and single-& (background) are command separators — a mutating
 		// follow-on must not be hidden behind a read head (Codex round-3 review).
 		{"exec_command", "cat x\nrm y", false},

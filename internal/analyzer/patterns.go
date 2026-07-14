@@ -441,7 +441,15 @@ func segmentIsRead(seg string) bool {
 		// content (`s`/`y`). Codex's most common file read is `sed -n 'M,Np' <file>`,
 		// so recognizing the print-only forms removes a large false-positive class
 		// (#37) while keeping every mutating form scanned (recall-safe, #13 posture).
-		return sedIsRead(rest)
+		//
+		// A sed script is a single (often quoted) argument that may contain whitespace
+		// (`'1 w out'`); the strings.Fields tokenization above would fragment it and
+		// hide the write command, so re-split quote-aware to keep the script whole.
+		argv := shellSplitArgv(seg)
+		if len(argv) == 0 || argv[0] != "sed" {
+			return false // could not reconcile the head → fail closed
+		}
+		return sedIsRead(argv[1:])
 	default:
 		return readCommandSet[head]
 	}
@@ -582,6 +590,62 @@ func shellNormalizeToken(t string) string {
 		}
 	}
 	return b.String()
+}
+
+// shellSplitArgv splits a command segment into argv, honoring single/double quotes and
+// backslash escapes so a quoted argument containing whitespace (e.g. a sed script
+// `'1 w out'`) stays a SINGLE token. It is quote-aware field splitting, NOT a shell
+// parser (C-003): no expansion or substitution — quotes are removed and `\x`→x, the
+// same lossy normalization as shellNormalizeToken. Used where token boundaries matter
+// for safety (sed script inspection).
+func shellSplitArgv(seg string) []string {
+	var args []string
+	var cur strings.Builder
+	started, inSingle, inDouble := false, false, false
+	for i := 0; i < len(seg); i++ {
+		c := seg[i]
+		switch {
+		case inSingle:
+			if c == '\'' {
+				inSingle = false
+			} else {
+				cur.WriteByte(c)
+			}
+			started = true
+		case inDouble:
+			switch {
+			case c == '"':
+				inDouble = false
+			case c == '\\' && i+1 < len(seg):
+				i++
+				cur.WriteByte(seg[i])
+			default:
+				cur.WriteByte(c)
+			}
+			started = true
+		case c == '\'':
+			inSingle, started = true, true
+		case c == '"':
+			inDouble, started = true, true
+		case c == '\\' && i+1 < len(seg):
+			i++
+			cur.WriteByte(seg[i])
+			started = true
+		case c == ' ' || c == '\t' || c == '\n':
+			if started {
+				args = append(args, cur.String())
+				cur.Reset()
+				started = false
+			}
+		default:
+			cur.WriteByte(c)
+			started = true
+		}
+	}
+	if started {
+		args = append(args, cur.String())
+	}
+	return args
 }
 
 // isEnvAssignment reports whether tok is a shell environment assignment (NAME=value)
