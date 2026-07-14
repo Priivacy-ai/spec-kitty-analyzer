@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/priivacy-ai/spec-kitty-analyzer/internal/analyzer"
+	"github.com/priivacy-ai/spec-kitty-analyzer/internal/gogov"
 	"github.com/priivacy-ai/spec-kitty-analyzer/internal/reports"
 )
 
@@ -36,6 +37,7 @@ type Result struct {
 	Timeline       []analyzer.TimelineEvent      `json:"timeline,omitempty"`
 	Signals        *Signals                      `json:"signals,omitempty"`
 	Surface        *analyzer.SpecKittySurface    `json:"spec_kitty_surface,omitempty"`
+	SpecKittyGo    *gogov.Report                 `json:"spec_kitty_go,omitempty"`
 	Notes          []string                      `json:"notes,omitempty"`
 }
 
@@ -224,6 +226,16 @@ func includeSet(items []string) map[string]bool {
 		out[item] = true
 	}
 	return out
+}
+
+// WantsSpecKittyGo reports whether the caller explicitly asked for the
+// spec-kitty-go activity section (`--include go`). It is deliberately OPT-IN and
+// NOT part of `all`: the section is computed by the caller from the raw log
+// files (a second full scan the analyzer report can't supply), so folding it
+// into the default `all` would silently double the log I/O on the common path.
+func WantsSpecKittyGo(include []string) bool {
+	set := includeSet(normalizeList(include))
+	return set["go"] || set["spec-kitty-go"] || set["speckittygo"]
 }
 
 func filterTimeline(events []analyzer.TimelineEvent, opts Options) []analyzer.TimelineEvent {
