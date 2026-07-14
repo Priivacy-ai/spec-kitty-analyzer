@@ -10,6 +10,13 @@ by the release workflow (see `RELEASE_CHECKLIST.md`).
 
 ## [Unreleased]
 
+### Fixed
+
+- **Codex `sed -n` reads no longer leak file content into failure scanning (#37).** A read-only
+  `sed` (e.g. `sed -n 'M,Np' file`) is now recognized as an inspection read, so failure/crash tokens
+  *inside* a file that codex dumps via `sed` no longer produce false detections — across any tier.
+  Any mutating/writing/executing `sed` form (`-i`, `w`/`r`/`e`, `s///w`, …) is still scanned.
+
 ## [0.3.0] - 2026-07-14
 
 Build-provenance, plus two new analysis surfaces. Binaries now self-report their **version, commit,
