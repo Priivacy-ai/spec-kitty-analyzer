@@ -14,13 +14,13 @@ well-sized package). Tests are included because the spec requires them (NFR-003)
 | T002 | Seed `[0.3.0]` from docs/releases/release-notes-0.3.0.md (with breaking-change notice) | WP01 | | [D] |
 | T003 | Seed `[0.2.0]` from the curated v0.2.0 GitHub Release body | WP01 | | [D] |
 | T004 | Seed `[0.1.1]` and `[0.1.0]` from git history (concise) | WP01 | | [D] |
-| T005 | `version.go` — SemVer parse (stable + compact prerelease), compare, canonical, tag↔version parity | WP02 | [P] |
-| T006 | `changelog.go` — heading parse (malformed = error), section extract, populated, top released version | WP02 | [P] |
-| T007 | `git.go` — discover `v*.*.*` tags, exclude-under-release, latest by tuple sort | WP02 | [P] |
-| T008 | `main.go` — dispatch, flags, `extract`, `validate` (branch state-aware + tag), exit codes | WP02 | |
-| T009 | `version_test.go` — parse/compare/parity/prerelease/monotonic table tests | WP02 | [P] |
-| T010 | `changelog_test.go` — extract/populated/malformed/missing-default/Unreleased/link-ref tests | WP02 | [P] |
-| T011 | `main_test.go` — dispatch + exit codes + branch inter-release vs release-prep + tag parity | WP02 | |
+| T005 | `version.go` — SemVer parse (stable + compact prerelease), compare, canonical, tag↔version parity | WP02 | [D] |
+| T006 | `changelog.go` — heading parse (malformed = error), section extract, populated, top released version | WP02 | [D] |
+| T007 | `git.go` — discover `v*.*.*` tags, exclude-under-release, latest by tuple sort | WP02 | [D] |
+| T008 | `main.go` — dispatch, flags, `extract`, `validate` (branch state-aware + tag), exit codes | WP02 | | [D] |
+| T009 | `version_test.go` — parse/compare/parity/prerelease/monotonic table tests | WP02 | [D] |
+| T010 | `changelog_test.go` — extract/populated/malformed/missing-default/Unreleased/link-ref tests | WP02 | [D] |
+| T011 | `main_test.go` — dispatch + exit codes + branch inter-release vs release-prep + tag parity | WP02 | | [D] |
 | T012 | Edit `release.yml` — `fetch-depth: 0` on checkout (FR-010) | WP03 | |
 | T013 | Edit `release.yml` — always create `dist/RELEASE_NOTES.md`; on tag builds run validate+extract | WP03 | |
 | T014 | Edit `release.yml` — triple-consistency guard (validate tag + binary version==tag, fail closed); set `body_path`; drop `generate_release_notes` | WP03 | |
