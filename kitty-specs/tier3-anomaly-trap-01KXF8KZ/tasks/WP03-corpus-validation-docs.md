@@ -19,7 +19,9 @@ subtasks:
 - T013
 phase: Phase 3 - Validation
 assignee: ''
-agent: claude
+agent: "claude"
+shell_pid: "79381"
+shell_pid_created_at: "1784000880.442636"
 history:
 - at: '2026-07-14T03:00:00Z'
   actor: system
@@ -114,3 +116,4 @@ Prove Tier-3 is **additive** and its output is **genuine** on committed corpus f
 
 ## Activity Log
 - 2026-07-14T03:00:00Z – system – Prompt created.
+- 2026-07-14T03:48:13Z – claude – shell_pid=79381 – Assigned agent via action command
