@@ -451,54 +451,89 @@ func segmentIsRead(seg string) bool {
 // not mistaken for a sed command when scanning for write/exec commands.
 var sedRegexAddr = regexp.MustCompile(`/(?:\\.|[^/\\])*/`)
 
+// sedSafeShortFlags are single-letter sed options that take NO argument and cannot
+// edit/write/execute: -n (quiet), -E/-r (extended regex), -s (separate), -z (null
+// data), -u (unbuffered). Any OTHER short flag may take an argument (e.g. GNU
+// `-l N`) or mutate, so it fails closed.
+var sedSafeShortFlags = map[rune]bool{
+	'n': true, 'E': true, 'r': true, 's': true, 'z': true, 'u': true,
+}
+
+// sedSafeLongFlags are argumentless long sed options that are inert.
+var sedSafeLongFlags = map[string]bool{
+	"--quiet": true, "--silent": true, "--regexp-extended": true, "--separate": true,
+	"--null-data": true, "--unbuffered": true, "--posix": true, "--sandbox": true,
+	"--debug": true,
+	// NB: argument-taking long options (e.g. --line-length=N, --expression handled
+	// above) are deliberately absent so they fail closed.
+}
+
 // sedIsRead reports whether a `sed` invocation only reads/prints — never edits in
-// place, writes or reads files, executes a shell, or transforms via `s`/`y`. Any
-// doubt resolves to false (scan), matching the codex-read scoping posture (#13/C-003).
+// place, writes/reads files, executes a shell, or transforms via `s`/`y`. It is
+// FAIL-CLOSED: any flag not proven inert (unknown short/long option, `-i`/`--in-place`,
+// `-f`/`--file`, or a script with a mutating/executing command) resolves to false
+// (scan), matching the recall-critical codex-read scoping posture (#13/C-003). A
+// false-allow here would wrongly exclude a real command failure, so the parser refuses
+// anything it cannot model — including attached expressions (`-e1wout`) and
+// argument-taking options (`-l N`) that could smuggle a write past a naive bundle scan.
 func sedIsRead(rest []string) bool {
 	var scripts []string
-	for i := 0; i < len(rest); i++ {
+	for i := 0; i < len(rest); {
 		f := rest[i]
 		switch {
-		case f == "--in-place" || strings.HasPrefix(f, "--in-place"):
-			return false // edits the file in place
-		case f == "--file" || strings.HasPrefix(f, "--file="):
-			return false // script from a file we cannot inspect
-		case f == "-f":
-			return false // script from a file we cannot inspect
-		case f == "--expression":
-			if i+1 < len(rest) {
-				scripts = append(scripts, rest[i+1])
-				i++
-			}
-		case strings.HasPrefix(f, "--expression="):
-			scripts = append(scripts, strings.TrimPrefix(f, "--expression="))
-		case f == "-e":
-			if i+1 < len(rest) {
-				scripts = append(scripts, rest[i+1])
-				i++
-			}
-		case strings.HasPrefix(f, "--"):
-			// other long flags (`--quiet`, `--regexp-extended`, `--null-data`, …) are inert
-		case strings.HasPrefix(f, "-") && f != "-":
-			// short-flag bundle, e.g. `-n`, `-nE`, `-i`, `-i.bak`, `-ne 'script'`
-			flags := f[1:]
-			if strings.ContainsRune(flags, 'i') {
-				return false // `-i` / `-ni` / `-i.bak` — in-place edit
-			}
-			if strings.ContainsRune(flags, 'f') {
-				return false // bundled `-f` — external script
-			}
-			if strings.HasSuffix(flags, "e") && i+1 < len(rest) {
-				// bundled `-e` takes the following arg as the expression
-				scripts = append(scripts, rest[i+1])
-				i++
-			}
-		default:
-			// The first bare operand is the script (when none gathered via -e); any
+		case f == "-" || !strings.HasPrefix(f, "-"):
+			// Bare operand: the first is the script (when none gathered via -e); any
 			// later bare operands are input files.
 			if len(scripts) == 0 {
 				scripts = append(scripts, f)
 			}
+			i++
+		case f == "--in-place" || strings.HasPrefix(f, "--in-place"):
+			return false // edits the file in place
+		case f == "--file" || strings.HasPrefix(f, "--file="):
+			return false // external script we cannot inspect
+		case f == "--expression":
+			if i+1 >= len(rest) {
+				return false
+			}
+			scripts = append(scripts, rest[i+1])
+			i += 2
+		case strings.HasPrefix(f, "--expression="):
+			scripts = append(scripts, strings.TrimPrefix(f, "--expression="))
+			i++
+		case strings.HasPrefix(f, "--"):
+			if !sedSafeLongFlags[f] {
+				return false // unknown/argument-taking long flag → fail closed
+			}
+			i++
+		default:
+			// Short-flag bundle, parsed char by char so an attached expression
+			// (`-e1wout`) or an argument-taking flag cannot slip through.
+			bundle := []rune(f[1:])
+			advanced := 1
+			for j := 0; j < len(bundle); j++ {
+				c := bundle[j]
+				if c == 'i' || c == 'f' {
+					return false // in-place edit / external script
+				}
+				if c == 'e' {
+					// `-e` takes the rest of the bundle as its expression, or the next arg.
+					if j+1 < len(bundle) {
+						scripts = append(scripts, string(bundle[j+1:]))
+					} else {
+						if i+1 >= len(rest) {
+							return false
+						}
+						scripts = append(scripts, rest[i+1])
+						advanced = 2
+					}
+					break
+				}
+				if !sedSafeShortFlags[c] {
+					return false // unknown short flag (may take an arg / mutate) → fail closed
+				}
+			}
+			i += advanced
 		}
 	}
 	if len(scripts) == 0 {

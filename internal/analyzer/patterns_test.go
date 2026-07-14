@@ -82,6 +82,16 @@ func TestClassifyCodexReadCommand(t *testing.T) {
 		{"exec_command", "sed -f script.sed f", false},
 		{"exec_command", "sed -n '1,10p' f > out", false},
 		{"exec_command", "sed -n '1,10p' f && rm f", false},
+		// Fail-closed parsing (Codex review): attached -eSCRIPT and argument-taking
+		// options must not smuggle a write past the classifier.
+		{"exec_command", "sed -n -e1wout log", false}, // attached -e write command
+		{"exec_command", "sed -n -e1s/a/b/ log", false},
+		{"exec_command", "sed -ne1wout log", false},      // bundled -n -e<write>
+		{"exec_command", "sed -n -ep log", true},         // attached -e print
+		{"exec_command", "sed -n -l 10 wout log", false}, // GNU -l takes an arg → fail closed
+		{"exec_command", "sed -n -l 10 '1,5p' f", false}, // unknown/arg option → fail closed even for a read
+		{"exec_command", "sed --help", false},            // unknown long flag → fail closed
+		{"exec_command", "sed -nE '/re/p' f", true},      // -E extended-regex is safe
 		// Newline and single-& (background) are command separators — a mutating
 		// follow-on must not be hidden behind a read head (Codex round-3 review).
 		{"exec_command", "cat x\nrm y", false},
