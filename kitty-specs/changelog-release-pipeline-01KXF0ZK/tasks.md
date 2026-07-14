@@ -21,12 +21,12 @@ well-sized package). Tests are included because the spec requires them (NFR-003)
 | T009 | `version_test.go` — parse/compare/parity/prerelease/monotonic table tests | WP02 | [D] |
 | T010 | `changelog_test.go` — extract/populated/malformed/missing-default/Unreleased/link-ref tests | WP02 | [D] |
 | T011 | `main_test.go` — dispatch + exit codes + branch inter-release vs release-prep + tag parity | WP02 | | [D] |
-| T012 | Edit `release.yml` — `fetch-depth: 0` on checkout (FR-010) | WP03 | |
-| T013 | Edit `release.yml` — always create `dist/RELEASE_NOTES.md`; on tag builds run validate+extract | WP03 | |
-| T014 | Edit `release.yml` — triple-consistency guard (validate tag + binary version==tag, fail closed); set `body_path`; drop `generate_release_notes` | WP03 | |
-| T015 | New `release-readiness.yml` — validator on release-control-path PRs + nightly + dispatch; `fetch-depth: 0` | WP03 | |
-| T016 | Edit `ci.yml` — extend cross-build smoke to also build `./tools/release` for the six targets | WP03 | |
-| T017 | Local end-to-end verification of the workflows' commands (validate/extract dry runs) | WP03 | |
+| T012 | Edit `release.yml` — `fetch-depth: 0` on checkout (FR-010) | WP03 | | [D] |
+| T013 | Edit `release.yml` — always create `dist/RELEASE_NOTES.md`; on tag builds run validate+extract | WP03 | | [D] |
+| T014 | Edit `release.yml` — triple-consistency guard (validate tag + binary version==tag, fail closed); set `body_path`; drop `generate_release_notes` | WP03 | | [D] |
+| T015 | New `release-readiness.yml` — validator on release-control-path PRs + nightly + dispatch; `fetch-depth: 0` | WP03 | | [D] |
+| T016 | Edit `ci.yml` — extend cross-build smoke to also build `./tools/release` for the six targets | WP03 | | [D] |
+| T017 | Local end-to-end verification of the workflows' commands (validate/extract dry runs) | WP03 | | [D] |
 | T018 | Author `RELEASE_CHECKLIST.md` — scoped tag-as-SSOT procedure | WP04 | |
 | T019 | Cross-check the checklist's commands/flags against the shipped `tools/release` CLI | WP04 | |
 | T020 | Link the checklist from README (Limitations/Releases pointer) if a natural spot exists | WP04 | |
