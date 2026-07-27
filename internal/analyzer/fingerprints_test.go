@@ -280,7 +280,7 @@ func TestFingerprintForcedTransitionStructural(t *testing.T) {
 	// (c2) Malformed/missing fields must not classify or panic: force not a bool,
 	// reason not a string, and reason absent (JSON that decodes to unexpected types).
 	for name, obj := range map[string]map[string]any{
-		"force-as-string":  {"force": "true", "reason": "Force move to planned"},
+		"force-as-string":   {"force": "true", "reason": "Force move to planned"},
 		"reason-not-string": {"force": true, "reason": []any{"Force move to planned"}},
 		"reason-absent":     {"force": true},
 	} {
