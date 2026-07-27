@@ -476,6 +476,35 @@ func isStructuralReviewEventKind(kind string) bool {
 	return kind == "mission_status_events"
 }
 
+// forcedOverridePrefixes are the controlled reason prefixes spec-kitty attaches to an
+// EXPLICIT operator/agent forced override (`move-task --force`, a done-override, or a
+// backward rewind), as opposed to the systemic force path used for bootstrap,
+// migration, and review-claim writes. Best-effort lexical detection of the
+// intervention subset of force==true events; see the forced_transition detector and
+// the #44 typed-fault-event contract for why this is prefix-matched rather than read
+// from a typed field.
+var forcedOverridePrefixes = []string{"force move to", "done override", "backward rewind"}
+
+// forcedOverrideReason reports whether reason names an explicit forced override. It
+// matches an override prefix at the start of ANY " | "-joined segment, because
+// spec-kitty joins a status note with the override note using that delimiter (e.g.
+// "Implementation complete and merged | Done override: squash merge"), so a strict
+// whole-string prefix would miss the compound form (a real false negative confirmed
+// in the corpus). Case-insensitive. Freeform forced reasons whose segments do not
+// begin with a controlled prefix deliberately do not match — see the forced_transition
+// detector comment.
+func forcedOverrideReason(reason string) bool {
+	for seg := range strings.SplitSeq(reason, "|") {
+		s := strings.ToLower(strings.TrimSpace(seg))
+		for _, p := range forcedOverridePrefixes {
+			if strings.HasPrefix(s, p) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
 // findFailureRule returns the failureRules entry with the given id. It is used
 // where a structural detection must emit the SAME finding as its text-rule
 // counterpart (review_rejected) without duplicating the rule's title/severity/
@@ -599,6 +628,35 @@ func classifyFailuresWithChannels(outputText, diagnosticText, sourceKind string,
 				add(rule, "top-level review_status field is has_feedback")
 			} else if v := nestedString(obj, "evidence", "review", "verdict"); strings.EqualFold(strings.TrimSpace(v), "rejected") {
 				add(rule, "evidence.review.verdict field is rejected")
+			}
+		}
+
+		// forced_transition: an EXPLICIT operator/agent forced state-machine override
+		// — the log-unique record that someone had to bypass the lane gate (recovering
+		// a stuck/mis-tracked WP, forcing done, or rewinding a review).
+		//
+		// SOURCE-KIND GATED to mission_status_events (same rationale as review_rejected:
+		// force/reason are generic fields a plain .json could carry).
+		//
+		// force==true is NOT itself the signal: in the corpus ~16% of events set it, the
+		// large majority for SYSTEMIC writes (canonical bootstrap, historical_frontmatter
+		// migration, "Started review via …" review-claim). The fault is the explicit-
+		// override SUBSET, identified best-effort by spec-kitty's controlled override-
+		// reason prefixes (forcedOverrideReason). This is LEXICAL, not a typed contract:
+		// spec-kitty also emits freeform forced reasons, which v1 intentionally does NOT
+		// flag (they conflate routine agent --force with genuine intervention and would
+		// re-open a large false-positive surface). A typed intervention field on the
+		// event would remove this coupling — tracked as the #44 fault-event contract.
+		if isStructuralReviewEventKind(sourceKind) {
+			if forced, ok := obj["force"].(bool); ok && forced {
+				if reason, ok := obj["reason"].(string); ok && forcedOverrideReason(reason) {
+					add(failureRule{
+						id:       "forced_transition",
+						title:    "Forced state-machine override",
+						severity: "medium",
+						recovery: "Confirm the forced transition was intended: a forced override bypasses the normal lane gate and usually marks recovery from a stuck or mis-tracked work package. If unexpected, investigate why the WP could not advance normally.",
+					}, "forced override reason: "+strings.TrimSpace(reason))
+				}
 			}
 		}
 	}
