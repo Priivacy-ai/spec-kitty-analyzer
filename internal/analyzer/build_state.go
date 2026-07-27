@@ -31,11 +31,27 @@ func (s *buildState) missionFor(slug string) *MissionSummary {
 	return s.mission[slug]
 }
 
-// isOpLogPath reports whether path is a real kitty-ops/<id>.jsonl op log — the
-// source that makes an op a genuine dispatch Op. Mirrors opPathRE so both a
-// leading `kitty-ops/…` (relative top-level) and `…/kitty-ops/…` (absolute) match.
-func isOpLogPath(path string) bool {
-	return opPathRE.MatchString(filepath.ToSlash(path))
+// isOpLogPath reports whether path is a real op log: a DIRECT child of a kitty-ops/
+// directory whose basename is <invocation-id>.jsonl (isOpLogBasename). It is the single
+// op-log identity predicate — classifyPathKind and kindFromJSON call it too, so the
+// three gates never disagree (#43). The direct-child requirement (parent dir ==
+// kitty-ops) matches the canonical kitty-ops/<id>.jsonl layout and keeps a nested or
+// archived file (kitty-ops/archive/<id>.jsonl) from being mistaken for a live op log.
+func isOpLogPath(p string) bool {
+	slash := filepath.ToSlash(p)
+	return filepath.Base(filepath.Dir(slash)) == "kitty-ops" && isOpLogBasename(filepath.Base(slash))
+}
+
+// opInvocationIDFromPath returns the invocation id of a real op-log path (its basename
+// without .jsonl), or "" if path is not an op log. The op-log basename is AUTHORITATIVE
+// for the op identity: a content invocation_id (read via a recursive, map-order-
+// sensitive scan) never overrides it, so structural op fields always attach to the
+// right op (#43).
+func opInvocationIDFromPath(path string) string {
+	if !isOpLogPath(path) {
+		return ""
+	}
+	return strings.TrimSuffix(filepath.Base(path), ".jsonl")
 }
 
 func (s *buildState) opFor(id string) *OpSummary {
@@ -130,8 +146,17 @@ func (s *buildState) absorbTimeline(events []TimelineEvent) {
 	}
 }
 
+// opOutcomes are the recognized terminal op outcomes. An op-log completed event may
+// carry outcome=null (recorded completion with no verdict), which stays "" — the op is
+// still completed (not open), just without a fault outcome.
+var opOutcomes = map[string]bool{"done": true, "failed": true, "abandoned": true}
+
+// absorbOpEvent folds one timeline event into its OpSummary. Outcome/closed_by/status
+// are read from the STRUCTURAL op-log fields (event.opEvent/opOutcome/opClosedBy),
+// populated only for real kitty-ops op logs, rather than from the flattened TextPreview
+// — the old text scan set Outcome="done" for ANY line containing "completed" (every
+// completed event does), so abandoned/doctor-swept ops were misclassified as done (#43).
 func (s *buildState) absorbOpEvent(op *OpSummary, event TimelineEvent) {
-	text := strings.ToLower(event.TextPreview)
 	for _, profile := range event.AgentProfiles {
 		if profile.Profile != "" && profile.Profile != "unknown" {
 			op.ProfileID = profile.Profile
@@ -140,25 +165,24 @@ func (s *buildState) absorbOpEvent(op *OpSummary, event TimelineEvent) {
 	if event.Scope.Action != "" {
 		op.Action = event.Scope.Action
 	}
-	if event.Timestamp != nil {
-		if strings.Contains(text, "started") && op.StartedAt == nil {
+	switch event.opEvent {
+	case "started":
+		if event.Timestamp != nil && op.StartedAt == nil {
 			op.StartedAt = event.Timestamp
 		}
-		if strings.Contains(text, "completed") || strings.Contains(text, "done") || strings.Contains(text, "failed") || strings.Contains(text, "abandoned") {
+	case "completed":
+		// A completed event always closes the op, even when outcome is null/absent
+		// (a recorded completion with no verdict must not read as an open orphan).
+		op.Status = "completed"
+		if event.Timestamp != nil {
 			op.CompletedAt = event.Timestamp
 		}
-	}
-	if strings.Contains(text, "completed") || strings.Contains(text, "outcome done") || strings.Contains(text, `"outcome":"done"`) {
-		op.Status = "completed"
-		op.Outcome = "done"
-	}
-	if strings.Contains(text, "outcome failed") || strings.Contains(text, `"outcome":"failed"`) {
-		op.Status = "completed"
-		op.Outcome = "failed"
-	}
-	if strings.Contains(text, "outcome abandoned") || strings.Contains(text, `"outcome":"abandoned"`) {
-		op.Status = "completed"
-		op.Outcome = "abandoned"
+		if opOutcomes[event.opOutcome] {
+			op.Outcome = event.opOutcome
+		}
+		if event.opClosedBy != "" {
+			op.closedBy = event.opClosedBy
+		}
 	}
 }
 

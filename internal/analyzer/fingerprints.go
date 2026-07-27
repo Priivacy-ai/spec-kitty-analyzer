@@ -464,10 +464,11 @@ var failureRules = []failureRule{
 //   - generic "json" (a plain .json file that happens to carry the field — the
 //     original false-positive path this gate closes),
 //   - "jsonl_transcript" (harness session logs never carry these bare fields),
-//   - "op_jsonl" — NOT included: classifyPathKind returns it for ANY supported file
-//     under a kitty-ops/ segment (e.g. kitty-ops/notes.md, kitty-ops/config.json),
-//     not just an op-event stream, so it is too broad to gate on safely. Op-event
-//     review detection, if ever needed, wants a tightened classifyPathKind first.
+//   - "op_jsonl" — NOT included: op-event streams carry a different event shape (op
+//     lifecycle: started/completed with outcome/closed_by), not the review/verdict
+//     fields these detectors target. Since #43 classifyPathKind returns op_jsonl only
+//     for a real op log (kitty-ops/<invocation-id>.jsonl via isOpLogBasename), not any
+//     kitty-ops/ file, but op logs still are not the review event source gated here.
 //   - the artifact kinds work_package / mission_meta / mission_status_snapshot /
 //     mission_artifact, which STORE or snapshot review state rather than emit a live
 //     rejection (WP frontmatter rejections come through addWorkPackageFrontmatterFailures).
