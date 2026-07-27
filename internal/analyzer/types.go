@@ -114,6 +114,14 @@ type TimelineEvent struct {
 	opEvent    string
 	opOutcome  string
 	opClosedBy string
+
+	// eventID carries the source status-event's event_id (trimmed), populated in
+	// eventFromTextCtx whenever the JSON object exposes one. The repeatedly_forced_work_package
+	// aggregate (buildFindings, #48) dedups counted forced_transition occurrences per work
+	// package by this id, so a mirrored status.events.jsonl (e.g. a .worktrees/ copy — which
+	// collectFiles does NOT exclude) cannot inflate a genuine 1× override into a false repeat.
+	// UNEXPORTED — never serialized (mirrors opEvent). In-memory only.
+	eventID string
 }
 
 type SlashCommand struct {
