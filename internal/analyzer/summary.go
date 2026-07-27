@@ -92,28 +92,50 @@ func buildFindings(events []TimelineEvent, ops []OpSummary) []Finding {
 			}
 		}
 	}
+	// addOpFinding records one op-scoped finding, single-sourcing the byID upsert +
+	// scope/evidence append shared by the op detectors below.
+	addOpFinding := func(id, title, severity, recovery string, op OpSummary, evidence string) {
+		f := byID[id]
+		if f == nil {
+			f = &Finding{ID: id, Title: title, Severity: severity, Recovery: recovery, Deterministic: true}
+			byID[id] = f
+		}
+		f.Count++
+		f.Scopes = appendScopeUnique(f.Scopes, Scope{Type: "op", InvocationID: op.InvocationID})
+		if len(f.Evidence) < 5 {
+			f.Evidence = append(f.Evidence, FindingEvidence{Text: evidence})
+		}
+	}
 	for _, op := range ops {
 		// Only flag ops backed by a real kitty-ops op log. Ops synthesized from an
 		// invocation_id merely mentioned in transcript/prose (or a WP review/implement
 		// invocation) are not dispatch Ops that close via profile-invocation complete.
-		if op.Status == "open" && op.sawOpEvent {
-			id := "open_op_orphan"
-			f := byID[id]
-			if f == nil {
-				f = &Finding{
-					ID:            id,
-					Title:         "Open Spec Kitty Op was not closed",
-					Severity:      "medium",
-					Recovery:      "Close the Op with spec-kitty profile-invocation complete --invocation-id <id> --outcome <done|failed|abandoned>.",
-					Deterministic: true,
-				}
-				byID[id] = f
+		if !op.sawOpEvent {
+			continue
+		}
+		switch {
+		case op.Status == "open":
+			addOpFinding("open_op_orphan", "Open Spec Kitty Op was not closed", "medium",
+				"Close the Op with spec-kitty profile-invocation complete --invocation-id <id> --outcome <done|failed|abandoned>.",
+				op, "kitty-ops/"+op.InvocationID+".jsonl has no completed event")
+		case op.Outcome == "failed":
+			// The Op closed reporting failure — the dispatched work did not succeed.
+			addOpFinding("op_failed", "Spec Kitty Op completed with a failed outcome", "medium",
+				"Inspect the Op's request and evidence; the dispatched work failed. Re-dispatch after fixing the cause, or record why the failure is acceptable.",
+				op, "kitty-ops/"+op.InvocationID+".jsonl completed with outcome=failed")
+		case op.Outcome == "abandoned":
+			// An abandoned Op. closed_by distinguishes an explicit agent abandonment from
+			// a doctor_sweep (the agent never closed it and the doctor swept it shut — the
+			// sharper workflow-discipline fault). Folded into one finding to avoid
+			// double-emitting for a single terminal state; closed_by rides the reason.
+			recovery := "Confirm the Op was meant to be abandoned. If not, re-dispatch and close it explicitly with profile-invocation complete."
+			evidence := "kitty-ops/" + op.InvocationID + ".jsonl completed with outcome=abandoned"
+			if op.closedBy == "doctor_sweep" {
+				evidence += " (closed_by=doctor_sweep: the agent never closed the Op; the doctor swept it shut)"
+			} else if op.closedBy != "" {
+				evidence += " (closed_by=" + op.closedBy + ")"
 			}
-			f.Count++
-			f.Scopes = appendScopeUnique(f.Scopes, Scope{Type: "op", InvocationID: op.InvocationID})
-			if len(f.Evidence) < 5 {
-				f.Evidence = append(f.Evidence, FindingEvidence{Text: "kitty-ops/" + op.InvocationID + ".jsonl has no completed event"})
-			}
+			addOpFinding("op_abandoned", "Spec Kitty Op was abandoned", "medium", recovery, op, evidence)
 		}
 	}
 	out := make([]Finding, 0, len(byID))

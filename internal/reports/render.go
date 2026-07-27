@@ -364,6 +364,8 @@ func isSpecKittyFailureID(id string) bool {
 		"namespace_package_import",
 		"no_code_commits",
 		"null_prompt_step_runtime_bug",
+		"op_abandoned",
+		"op_failed",
 		"ref_advance_non_fast_forward",
 		"review_rejected",
 		"reviewer_failed",

@@ -201,10 +201,9 @@ func classifyPathKind(path string) string {
 	slash := filepath.ToSlash(path)
 	base := filepath.Base(path)
 	ext := strings.ToLower(filepath.Ext(path))
-	inKittyOps := hasPathSegment(slash, "kitty-ops")
 	inKittySpecs := hasPathSegment(slash, "kitty-specs")
 	switch {
-	case inKittyOps:
+	case isOpLogPath(path):
 		return "op_jsonl"
 	case inKittySpecs && base == "status.events.jsonl":
 		return "mission_status_events"
@@ -234,6 +233,16 @@ func hasPathSegment(slashPath, segment string) bool {
 		}
 	}
 	return false
+}
+
+// isOpLogBasename reports whether base is a real kitty-ops op-log filename:
+// <invocation-id>.jsonl where the invocation id is a valid ULID or 32-hex digest
+// (invocationIDRE). It is the SINGLE op-log identity gate, shared by classifyPathKind,
+// kindFromJSON, and isOpLogPath, so those never disagree — non-op files under
+// kitty-ops/ (lifecycle.jsonl, notes.md, config.json) are NOT op-event streams (#43).
+func isOpLogBasename(base string) bool {
+	id, ok := strings.CutSuffix(base, ".jsonl")
+	return ok && invocationIDRE.MatchString(id)
 }
 
 // buildCodexContext scans a file's bytes for codex function_call payloads and builds the
@@ -380,6 +389,13 @@ func eventFromJSONObjectCtx(path string, line, turn int, obj map[string]any, ctx
 		event.AgentProfiles = append(event.AgentProfiles, AgentProfileUse{Profile: profile, Raw: "profile_id:" + profile})
 	}
 	event.Scope = mergeScope(event.Scope, scopeFromJSON(obj))
+	// For a real op log the path basename is authoritative for the op identity — do not
+	// let a content invocation_id (recursive, map-order-sensitive scan) reattach this
+	// event's structural op fields to a different op (#43).
+	if id := opInvocationIDFromPath(path); id != "" {
+		event.Scope.Type = "op"
+		event.Scope.InvocationID = id
+	}
 	if event.Kind == "message" {
 		event.Kind = kindFromJSON(path, obj, event)
 	}
@@ -540,6 +556,17 @@ func eventFromTextCtx(path string, line, turn int, text string, obj map[string]a
 	case scope.Type == "op":
 		kind = "op_event"
 	}
+	// Structural op-log fields (event/outcome/closed_by), read from the JSON object
+	// ONLY when this line comes from a real kitty-ops op log — absorbOpEvent consumes
+	// them to drive op Status/Outcome/ClosedBy structurally instead of scanning the
+	// flattened TextPreview (which cannot distinguish event=completed+outcome=abandoned
+	// from a clean done — #43).
+	var opEvent, opOutcome, opClosedBy string
+	if obj != nil && isOpLogPath(path) {
+		opEvent = strings.ToLower(strings.TrimSpace(nestedString(obj, "event")))
+		opOutcome = strings.ToLower(strings.TrimSpace(nestedString(obj, "outcome")))
+		opClosedBy = strings.ToLower(strings.TrimSpace(nestedString(obj, "closed_by")))
+	}
 	return TimelineEvent{
 		Turn:           turn,
 		SourcePath:     path,
@@ -555,6 +582,9 @@ func eventFromTextCtx(path string, line, turn int, text string, obj map[string]a
 		Failures:       failures,
 		outputCh:       outCh,
 		diagnosticCh:   diagCh,
+		opEvent:        opEvent,
+		opOutcome:      opOutcome,
+		opClosedBy:     opClosedBy,
 	}
 }
 
@@ -632,7 +662,7 @@ func isArtifactKind(kind string) bool {
 func kindFromJSON(path string, obj map[string]any, event TimelineEvent) string {
 	eventType := strings.ToLower(firstJSONStringByKey(obj, "event", "event_type", "type", "kind", "status", "outcome"))
 	switch {
-	case strings.Contains(filepath.ToSlash(path), "/kitty-ops/"):
+	case isOpLogPath(path):
 		return "op_event"
 	case strings.Contains(filepath.Base(path), "status.events"):
 		return "mission_event"
@@ -650,9 +680,9 @@ func kindFromJSON(path string, obj map[string]any, event TimelineEvent) string {
 func scopeFromPathAndText(path, text string, invocations []CLIInvocation, slash []SlashCommand) Scope {
 	scope := Scope{Type: "outside"}
 	slashPath := filepath.ToSlash(path)
-	if m := opPathRE.FindStringSubmatch(slashPath); len(m) > 1 {
+	if id := opInvocationIDFromPath(path); id != "" {
 		scope.Type = "op"
-		scope.InvocationID = m[1]
+		scope.InvocationID = id
 	}
 	if m := missionPathRE.FindStringSubmatch(slashPath); len(m) > 1 {
 		scope.Type = "mission"

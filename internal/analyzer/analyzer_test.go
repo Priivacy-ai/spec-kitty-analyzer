@@ -91,7 +91,10 @@ func TestClassifyPathKindUsesKittySegments(t *testing.T) {
 		{"kitty-specs/sample/tasks/WP01.md", "work_package"},
 		{"repo/kitty-specs/sample/tasks/WP01.md", "work_package"},
 		{"/tmp/repo/kitty-specs/sample/status.events.jsonl", "mission_status_events"},
-		{"kitty-ops/01KTEST.jsonl", "op_jsonl"},
+		{"kitty-ops/01KX8RRRW59B4EFNWNKV3EJBA7.jsonl", "op_jsonl"},       // real ULID op log
+		{"kitty-ops/c03904a5846f4232a42bf568546961d8.jsonl", "op_jsonl"}, // legacy 32-hex op log
+		{"kitty-ops/lifecycle.jsonl", "jsonl_transcript"},                // #43: non-op file under kitty-ops/ is NOT op_jsonl
+		{"kitty-ops/01KTEST.jsonl", "jsonl_transcript"},                  // #43: too-short id is not a real op log
 		{"notkitty-specs/sample/tasks/WP01.md", "text"},
 	}
 	for _, c := range cases {

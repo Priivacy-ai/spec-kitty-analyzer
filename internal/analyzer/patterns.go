@@ -13,7 +13,6 @@ var (
 	skillNameRE     = regexp.MustCompile(`(?i)(?:^|[\s"'(:` + "`" + `/])((?:spk-[a-z0-9]+-[a-z0-9_.\-]+)|(?:spec-kitty-(?:bulk-edit-classification|charter-doctrine|git-workflow|glossary-context|implement-review|mission-review|mission-system|orchestrator-api-operator|program-orchestrate|runtime-next|runtime-review|setup-doctor|spdd-reasons|agent-surface-research|cli-orchestration|delegated-missions|docker-modes|monorepo-prep))|(?:spec-kitty\.[a-z0-9_.\-]+)|ad-hoc-profile-load)\b`)
 	missionPathRE   = regexp.MustCompile(`(?:^|[/\s])kitty-specs/([A-Za-z0-9][A-Za-z0-9_.\-]*)`)
 	missionHandleRE = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9_.\-]{0,127}$`)
-	opPathRE        = regexp.MustCompile(`(?:^|[/\s])kitty-ops/([A-Za-z0-9][A-Za-z0-9_.\-]*)\.jsonl`)
 	// invocationIDRE validates a token pulled from free text before it is trusted
 	// as a Spec Kitty invocation id: either a 32-char hex digest (e.g. a review
 	// invocation) or a 26-char Crockford ULID (e.g. a mission id). This rejects

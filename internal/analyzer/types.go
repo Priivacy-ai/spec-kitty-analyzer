@@ -105,6 +105,15 @@ type TimelineEvent struct {
 	// UNEXPORTED on purpose — encoding/json never serializes it, so it never affects
 	// the report schema (mirrors the outputCh/diagnosticCh precedent). In-memory only.
 	anomalyCandidates []anomalyCandidate
+
+	// opEvent/opOutcome/opClosedBy carry the structural op-log fields (event, outcome,
+	// closed_by), lower-cased, populated in eventFromTextCtx ONLY when the source is a
+	// real kitty-ops op log (isOpLogPath). absorbOpEvent reads them to drive op
+	// Status/Outcome/ClosedBy structurally rather than by scanning TextPreview (#43).
+	// UNEXPORTED — never serialized (mirrors outputCh/anomalyCandidates). In-memory only.
+	opEvent    string
+	opOutcome  string
+	opClosedBy string
 }
 
 type SlashCommand struct {
@@ -227,6 +236,10 @@ type OpSummary struct {
 	// mentioned in transcript/prose. It gates open_op_orphan (unexported: not part
 	// of the report schema). See summary.go.
 	sawOpEvent bool
+	// closedBy records the op-log closed_by value (e.g. "doctor_sweep" when an op the
+	// agent never closed was swept shut by the doctor, vs "agent"). Unexported (not in
+	// the report schema); used to enrich the op_abandoned finding reason (#43).
+	closedBy string
 }
 
 type SpecKittySurface struct {
