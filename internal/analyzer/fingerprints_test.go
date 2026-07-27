@@ -218,6 +218,88 @@ func TestFingerprintReviewRejectedStructural(t *testing.T) {
 	}
 }
 
+// TestFingerprintForcedTransitionStructural pins #41: an EXPLICIT operator/agent
+// forced override (force==true + a controlled override-reason prefix) on a status
+// event classifies as forced_transition, while the systemic force==true writes that
+// dominate the corpus (bootstrap/migration/review-claim) do NOT. Channels are empty
+// throughout to prove detection comes from the obj fields, not leaked channel text.
+func TestFingerprintForcedTransitionStructural(t *testing.T) {
+	// (a) The three controlled override-reason families must classify.
+	for _, reason := range []string{
+		"Force move to planned",
+		"Force move to done",
+		"Done override: Mission merged via squash commit",
+		"backward rewind: in_review -> in_progress",
+		"FORCE MOVE TO done", // case-insensitive
+		"Implementation complete and merged | Done override: squash merge to main", // compound: override note in a |-joined segment
+	} {
+		obj := map[string]any{"event_type": "wp_lane_changed", "wp_id": "WP01", "force": true, "reason": reason}
+		if got := classifyFailuresWithChannels("", "", "mission_status_events", obj, nil); !failureListHas(got, "forced_transition") {
+			t.Fatalf("explicit forced override %q must classify forced_transition: %#v", reason, got)
+		}
+	}
+
+	// (b) Systemic force==true writes (the ~2700-event majority) must NOT classify —
+	// this is the whole point of the reason filter vs a blanket force check.
+	for _, reason := range []string{
+		"canonical bootstrap",
+		"historical_frontmatter_to_jsonl:v1",
+		"bootstrap from frontmatter lane in_progress before move-task transition",
+		"sync from frontmatter lane in_progress before transition",
+		"Started review via action command",
+		"Started review via workflow command",
+		"Implementation complete",
+		"Ready for review",
+	} {
+		obj := map[string]any{"force": true, "reason": reason}
+		if got := classifyFailuresWithChannels("", "", "mission_status_events", obj, nil); failureListHas(got, "forced_transition") {
+			t.Fatalf("systemic forced write %q must NOT classify forced_transition: %#v", reason, got)
+		}
+	}
+
+	// (b2) Word-boundary guard: a freeform reason that merely OPENS with the same
+	// letters as a controlled prefix (no boundary after it) must NOT classify.
+	for _, reason := range []string{
+		"force move toward a review setup",
+		"done overrideable migration note",
+		"backward rewinding is not supported here",
+	} {
+		obj := map[string]any{"force": true, "reason": reason}
+		if got := classifyFailuresWithChannels("", "", "mission_status_events", obj, nil); failureListHas(got, "forced_transition") {
+			t.Fatalf("boundary: freeform reason %q must NOT classify forced_transition: %#v", reason, got)
+		}
+	}
+
+	// (c) force==false with an override-shaped reason must NOT classify (force is the
+	// gate; a non-forced normal transition is not an override).
+	notForced := map[string]any{"force": false, "reason": "Force move to planned"}
+	if got := classifyFailuresWithChannels("", "", "mission_status_events", notForced, nil); failureListHas(got, "forced_transition") {
+		t.Fatalf("force=false must NOT classify forced_transition: %#v", got)
+	}
+
+	// (c2) Malformed/missing fields must not classify or panic: force not a bool,
+	// reason not a string, and reason absent (JSON that decodes to unexpected types).
+	for name, obj := range map[string]map[string]any{
+		"force-as-string":   {"force": "true", "reason": "Force move to planned"},
+		"reason-not-string": {"force": true, "reason": []any{"Force move to planned"}},
+		"reason-absent":     {"force": true},
+	} {
+		if got := classifyFailuresWithChannels("", "", "mission_status_events", obj, nil); failureListHas(got, "forced_transition") {
+			t.Fatalf("malformed case %q must NOT classify forced_transition: %#v", name, got)
+		}
+	}
+
+	// (d) SOURCE-KIND GATE: an explicit forced override delivered from a non-live-event
+	// source must NOT classify — force/reason are generic fields a plain .json could
+	// carry, so the gate admits only the status.events.jsonl event log.
+	forced := map[string]any{"force": true, "reason": "Force move to planned"}
+	for _, kind := range []string{"json", "jsonl_transcript", "op_jsonl", "mission_meta", ""} {
+		if got := classifyFailuresWithChannels("", "", kind, forced, nil); failureListHas(got, "forced_transition") {
+			t.Fatalf("forced override from non-live-event kind %q must NOT classify: %#v", kind, got)
+		}
+	}
+}
+
 // TestFingerprintOutputScopedClassifiesFromOutput is the positive counterpart:
 // an output-scoped pattern fed via the output channel still classifies (proving
 // the scope routing is wired, not merely suppressing everything). merge_conflict's

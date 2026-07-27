@@ -565,7 +565,7 @@ func TestReviewRejectedStructuralEndToEndStatusEvents(t *testing.T) {
 // from a bare review_status/verdict JSON field, but those are generic-enough field
 // names that a plain .json file, a harness transcript, or an artifact SNAPSHOT that
 // merely stores review state could carry them. The detector is gated
-// (isStructuralReviewEventKind) to spec-kitty live-event streams only, so none of
+// (isMissionStatusEventKind) to spec-kitty live-event streams only, so none of
 // those non-event sources may surface review_rejected end-to-end — a real
 // false-positive path if the gate regresses. Note this is closed at DETECTION time
 // (kind gate), independent of the artifact whitelist, which is why a generic "json"
