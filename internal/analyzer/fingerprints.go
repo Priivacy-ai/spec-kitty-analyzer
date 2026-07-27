@@ -450,16 +450,17 @@ var failureRules = []failureRule{
 	},
 }
 
-// isStructuralReviewEventKind reports whether a source kind is a spec-kitty
+// isMissionStatusEventKind reports whether a source kind is a spec-kitty
 // live-event stream whose lines ARE discrete runtime events — the only source for
-// which the structural review_rejected detector (classifyFailuresWithChannels) is
-// enabled. It is scoped to "mission_status_events" ALONE: that kind maps to exactly
-// one file, kitty-specs/**/status.events.jsonl (classifyPathKind keys on the literal
-// basename), which is the mission event log and reliably carries both shapes item A
-// targets — a top-level review_status and an evidence.review.verdict.
+// which the structural obj-field detectors in classifyFailuresWithChannels
+// (review_rejected, forced_transition) are enabled. It is scoped to
+// "mission_status_events" ALONE: that kind maps to exactly one file,
+// kitty-specs/**/status.events.jsonl (classifyPathKind keys on the literal basename),
+// which is the mission event log and reliably carries the shapes those detectors
+// target — a top-level review_status, an evidence.review.verdict, and force/reason.
 //
-// It deliberately EXCLUDES everything else, because review_status/verdict are
-// generic-enough field names to appear in non-event data:
+// It deliberately EXCLUDES everything else, because these field names are
+// generic-enough to appear in non-event data:
 //   - generic "json" (a plain .json file that happens to carry the field — the
 //     original false-positive path this gate closes),
 //   - "jsonl_transcript" (harness session logs never carry these bare fields),
@@ -472,7 +473,7 @@ var failureRules = []failureRule{
 //     rejection (WP frontmatter rejections come through addWorkPackageFrontmatterFailures).
 //
 // Values are the classifyPathKind vocabulary.
-func isStructuralReviewEventKind(kind string) bool {
+func isMissionStatusEventKind(kind string) bool {
 	return kind == "mission_status_events"
 }
 
@@ -490,19 +491,28 @@ var forcedOverridePrefixes = []string{"force move to", "done override", "backwar
 // spec-kitty joins a status note with the override note using that delimiter (e.g.
 // "Implementation complete and merged | Done override: squash merge"), so a strict
 // whole-string prefix would miss the compound form (a real false negative confirmed
-// in the corpus). Case-insensitive. Freeform forced reasons whose segments do not
-// begin with a controlled prefix deliberately do not match — see the forced_transition
-// detector comment.
+// in the corpus). The prefix must be followed by a word boundary (segment end or a
+// non-[a-z0-9_] byte) so a freeform reason that merely opens with the same letters
+// ("force move toward review setup", "done overrideable migration note") does NOT
+// match. Case-insensitive. Freeform forced reasons whose segments do not begin with a
+// controlled prefix deliberately do not match — see the forced_transition detector.
 func forcedOverrideReason(reason string) bool {
 	for seg := range strings.SplitSeq(reason, "|") {
 		s := strings.ToLower(strings.TrimSpace(seg))
 		for _, p := range forcedOverridePrefixes {
-			if strings.HasPrefix(s, p) {
+			if rest, ok := strings.CutPrefix(s, p); ok && (rest == "" || !isReasonWordByte(rest[0])) {
 				return true
 			}
 		}
 	}
 	return false
+}
+
+// isReasonWordByte reports whether b (from an already-lowercased reason segment)
+// continues a word, so a controlled override prefix must be followed by a non-word
+// byte (or segment end) to match — the word-boundary guard in forcedOverrideReason.
+func isReasonWordByte(b byte) bool {
+	return b == '_' || (b >= 'a' && b <= 'z') || (b >= '0' && b <= '9')
 }
 
 // findFailureRule returns the failureRules entry with the given id. It is used
@@ -605,7 +615,7 @@ func classifyFailuresWithChannels(outputText, diagnosticText, sourceKind string,
 		// scoping (the pre-scoping flattenJSON pipeline saw it).
 		//
 		// SOURCE-KIND GATED: fire only for spec-kitty live-event streams
-		// (isStructuralReviewEventKind), not for arbitrary JSON. review_status/verdict
+		// (isMissionStatusEventKind), not for arbitrary JSON. review_status/verdict
 		// are generic-enough field names that a plain .json input (kind "json") — or a
 		// harness transcript line — could otherwise carry them and mint a false
 		// review_rejected. The artifact whitelist alone does not close this: a generic
@@ -623,7 +633,7 @@ func classifyFailuresWithChannels(outputText, diagnosticText, sourceKind string,
 		// (review_status==has_feedback, verdict==rejected); the seen[] dedup keeps an
 		// event matched by both this and the text rule at ONE finding. findFailureRule
 		// keeps the rule's title/severity/recovery single-sourced.
-		if rule, ok := findFailureRule("review_rejected"); ok && isStructuralReviewEventKind(sourceKind) {
+		if rule, ok := findFailureRule("review_rejected"); ok && isMissionStatusEventKind(sourceKind) {
 			if rs, ok := obj["review_status"].(string); ok && strings.EqualFold(strings.TrimSpace(rs), "has_feedback") {
 				add(rule, "top-level review_status field is has_feedback")
 			} else if v := nestedString(obj, "evidence", "review", "verdict"); strings.EqualFold(strings.TrimSpace(v), "rejected") {
@@ -647,7 +657,7 @@ func classifyFailuresWithChannels(outputText, diagnosticText, sourceKind string,
 		// flag (they conflate routine agent --force with genuine intervention and would
 		// re-open a large false-positive surface). A typed intervention field on the
 		// event would remove this coupling — tracked as the #44 fault-event contract.
-		if isStructuralReviewEventKind(sourceKind) {
+		if isMissionStatusEventKind(sourceKind) {
 			if forced, ok := obj["force"].(bool); ok && forced {
 				if reason, ok := obj["reason"].(string); ok && forcedOverrideReason(reason) {
 					add(failureRule{

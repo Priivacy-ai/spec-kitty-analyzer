@@ -257,11 +257,36 @@ func TestFingerprintForcedTransitionStructural(t *testing.T) {
 		}
 	}
 
+	// (b2) Word-boundary guard: a freeform reason that merely OPENS with the same
+	// letters as a controlled prefix (no boundary after it) must NOT classify.
+	for _, reason := range []string{
+		"force move toward a review setup",
+		"done overrideable migration note",
+		"backward rewinding is not supported here",
+	} {
+		obj := map[string]any{"force": true, "reason": reason}
+		if got := classifyFailuresWithChannels("", "", "mission_status_events", obj, nil); failureListHas(got, "forced_transition") {
+			t.Fatalf("boundary: freeform reason %q must NOT classify forced_transition: %#v", reason, got)
+		}
+	}
+
 	// (c) force==false with an override-shaped reason must NOT classify (force is the
 	// gate; a non-forced normal transition is not an override).
 	notForced := map[string]any{"force": false, "reason": "Force move to planned"}
 	if got := classifyFailuresWithChannels("", "", "mission_status_events", notForced, nil); failureListHas(got, "forced_transition") {
 		t.Fatalf("force=false must NOT classify forced_transition: %#v", got)
+	}
+
+	// (c2) Malformed/missing fields must not classify or panic: force not a bool,
+	// reason not a string, and reason absent (JSON that decodes to unexpected types).
+	for name, obj := range map[string]map[string]any{
+		"force-as-string":  {"force": "true", "reason": "Force move to planned"},
+		"reason-not-string": {"force": true, "reason": []any{"Force move to planned"}},
+		"reason-absent":     {"force": true},
+	} {
+		if got := classifyFailuresWithChannels("", "", "mission_status_events", obj, nil); failureListHas(got, "forced_transition") {
+			t.Fatalf("malformed case %q must NOT classify forced_transition: %#v", name, got)
+		}
 	}
 
 	// (d) SOURCE-KIND GATE: an explicit forced override delivered from a non-live-event
