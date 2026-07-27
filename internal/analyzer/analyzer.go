@@ -567,6 +567,12 @@ func eventFromTextCtx(path string, line, turn int, text string, obj map[string]a
 		opOutcome = strings.ToLower(strings.TrimSpace(nestedString(obj, "outcome")))
 		opClosedBy = strings.ToLower(strings.TrimSpace(nestedString(obj, "closed_by")))
 	}
+	// Stable status-event identity for per-WP dedup in the repeatedly_forced_work_package
+	// aggregate (#48). Case-preserved (event_id is an opaque ULID); empty when absent.
+	var eventID string
+	if obj != nil {
+		eventID = strings.TrimSpace(nestedString(obj, "event_id"))
+	}
 	return TimelineEvent{
 		Turn:           turn,
 		SourcePath:     path,
@@ -585,6 +591,7 @@ func eventFromTextCtx(path string, line, turn int, text string, obj map[string]a
 		opEvent:        opEvent,
 		opOutcome:      opOutcome,
 		opClosedBy:     opClosedBy,
+		eventID:        eventID,
 	}
 }
 

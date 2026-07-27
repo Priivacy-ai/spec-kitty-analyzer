@@ -1,6 +1,11 @@
 package analyzer
 
-import "sort"
+import (
+	"fmt"
+	"path/filepath"
+	"sort"
+	"strings"
+)
 
 func buildSummary(report Report) Summary {
 	cmds := map[string]bool{}
@@ -63,8 +68,88 @@ func buildSummary(report Report) Summary {
 	return s
 }
 
+// forcedOverrideRepeatThreshold is the per-work-package count of genuine forced_transition
+// overrides at or above which a WP is flagged as repeatedly_forced_work_package (#48). A
+// single forced override is routine recovery; repeated overrides mark a WP that kept failing
+// to advance through the normal lane gate. Set to 2 from the corpus per-WP distribution (~90%
+// of forced WPs are one-off; the >=2 tail is ~10%), mirroring spec-kitty's own merge-preflight
+// repeat heuristic — but computed over the already-filtered genuine interventions
+// (forced_transition), NOT the systemic-force-polluted status.json force_count.
+const forcedOverrideRepeatThreshold = 2
+
+// forcedWPKey identifies a work package for per-WP forced-override aggregation.
+type forcedWPKey struct {
+	mission string
+	wp      string
+}
+
+// forcedWPAgg accumulates genuine forced_transition occurrences for one work package. The
+// per-WP occurrence count is not recoverable from the aggregated forced_transition Finding
+// (Finding.Count is global; Finding.Scopes are deduped), so #48 counts here from the raw
+// per-event failures before any dedup.
+type forcedWPAgg struct {
+	scope        Scope           // normalized WP scope: Type=mission, no action/invocation
+	count        int             // distinct genuine forced overrides on this WP
+	seenEvent    map[string]bool // event_id dedup — a mirrored status.events.jsonl must not inflate count
+	firstSeq     int             // earliest counted event seq (finding FirstSeq)
+	lastSeq      int             // latest counted event seq (finding LastSeq)
+	evSeq        int             // representative event seq (evidence)
+	evSourcePath string          // representative event source (evidence provenance)
+	evLine       int             // representative event line (evidence provenance)
+}
+
+// isWorktreeMirrorPath reports whether path is under a .worktrees/ tree — a per-WP checkout
+// that mirrors the canonical status.events.jsonl. collectFiles does not exclude these, so the
+// same status event can appear both canonically and mirrored under one repo.
+func isWorktreeMirrorPath(path string) bool {
+	return strings.Contains(filepath.ToSlash(path), "/.worktrees/")
+}
+
+// preferEvidenceSource reports whether event e is a better evidence source for agg than the one
+// already retained: a canonical (non-.worktrees) source beats a mirror, and within the same
+// class the earlier seq wins. Keeps the cited line deterministic and canonical even when a
+// worktree mirror of the same event_id sorts ahead of the canonical copy.
+func preferEvidenceSource(agg *forcedWPAgg, e TimelineEvent) bool {
+	if agg.evSourcePath == "" {
+		return true
+	}
+	curMirror := isWorktreeMirrorPath(agg.evSourcePath)
+	newMirror := isWorktreeMirrorPath(e.SourcePath)
+	if curMirror != newMirror {
+		return curMirror // replace only when the retained source is the mirror
+	}
+	return e.Seq < agg.evSeq
+}
+
+// flaggedForcedWPs returns the work packages whose genuine forced_transition count meets
+// forcedOverrideRepeatThreshold, sorted deterministically (count desc, then mission, then wp)
+// so Scopes/Evidence order and FirstSeq/LastSeq are reproducible despite randomized Go map
+// iteration order.
+func flaggedForcedWPs(byWP map[forcedWPKey]*forcedWPAgg) []*forcedWPAgg {
+	out := make([]*forcedWPAgg, 0, len(byWP))
+	for _, agg := range byWP {
+		if agg.count >= forcedOverrideRepeatThreshold {
+			out = append(out, agg)
+		}
+	}
+	sort.Slice(out, func(i, j int) bool {
+		if out[i].count != out[j].count {
+			return out[i].count > out[j].count
+		}
+		if out[i].scope.MissionSlug != out[j].scope.MissionSlug {
+			return out[i].scope.MissionSlug < out[j].scope.MissionSlug
+		}
+		return out[i].scope.WorkPackage < out[j].scope.WorkPackage
+	})
+	return out
+}
+
 func buildFindings(events []TimelineEvent, ops []OpSummary) []Finding {
 	byID := map[string]*Finding{}
+	// forcedByWP accumulates genuine forced_transition overrides per work package for the
+	// repeatedly_forced_work_package aggregate (#48), counted from the raw per-event failures
+	// below because the aggregated forced_transition Finding cannot preserve a per-WP count.
+	forcedByWP := map[forcedWPKey]*forcedWPAgg{}
 	for _, event := range events {
 		for _, failure := range event.Failures {
 			f := byID[failure.ID]
@@ -90,7 +175,84 @@ func buildFindings(events []TimelineEvent, ops []OpSummary) []Finding {
 					Text:       event.TextPreview,
 				})
 			}
+
+			// Per-WP aggregation for repeatedly_forced_work_package (#48). Only genuine
+			// forced overrides (already filtered by the forced_transition detector) that
+			// carry both a mission and a WP are attributable; dedup by event_id so a
+			// duplicated status-event line (e.g. a .worktrees/ mirror, which collectFiles
+			// does not exclude) cannot inflate one override into a false repeat.
+			if failure.ID == "forced_transition" {
+				mission := strings.TrimSpace(event.Scope.MissionSlug)
+				wp := strings.TrimSpace(event.Scope.WorkPackage)
+				if mission != "" && wp != "" {
+					key := forcedWPKey{mission: mission, wp: wp}
+					agg := forcedByWP[key]
+					if agg == nil {
+						agg = &forcedWPAgg{
+							scope:     Scope{Type: "mission", MissionSlug: mission, WorkPackage: wp},
+							seenEvent: map[string]bool{},
+						}
+						forcedByWP[key] = agg
+					}
+					// Count distinct genuine overrides — dedup by event_id so a mirrored line
+					// cannot inflate the count — and track the counted-seq span for the finding.
+					// Events without an event_id cannot be deduped and are counted as-is.
+					if event.eventID == "" || !agg.seenEvent[event.eventID] {
+						if event.eventID != "" {
+							agg.seenEvent[event.eventID] = true
+						}
+						if agg.count == 0 || event.Seq < agg.firstSeq {
+							agg.firstSeq = event.Seq
+						}
+						if event.Seq > agg.lastSeq {
+							agg.lastSeq = event.Seq
+						}
+						agg.count++
+					}
+					// Pick the best evidence provenance across ALL occurrences (including
+					// deduped duplicates) so a canonical copy replaces a worktree mirror even
+					// when the mirror was counted first.
+					if preferEvidenceSource(agg, event) {
+						agg.evSeq = event.Seq
+						agg.evSourcePath = event.SourcePath
+						agg.evLine = event.Line
+					}
+				}
+			}
 		}
+	}
+
+	// repeatedly_forced_work_package: a WP force-overridden forcedOverrideRepeatThreshold+
+	// times — a sharper reliability signal than a single override (it kept getting stuck).
+	// Synthesized like the op findings below; the render allowlist (isSpecKittyFailureID)
+	// carries the id for consistency though report.Findings render unconditionally.
+	if flagged := flaggedForcedWPs(forcedByWP); len(flagged) > 0 {
+		f := &Finding{
+			ID:            "repeatedly_forced_work_package",
+			Title:         "Work package forced repeatedly",
+			Severity:      "medium",
+			Recovery:      "A work package with multiple forced overrides repeatedly failed to advance through the normal lane gate. Investigate why it kept getting stuck (a dependency, review, or state-tracking fault) rather than treating each override in isolation — a repeatedly forced WP usually marks an underlying workflow problem.",
+			Deterministic: true,
+		}
+		for i, agg := range flagged {
+			f.Count++
+			f.Scopes = append(f.Scopes, agg.scope)
+			if i == 0 || agg.firstSeq < f.FirstSeq {
+				f.FirstSeq = agg.firstSeq
+			}
+			if agg.lastSeq > f.LastSeq {
+				f.LastSeq = agg.lastSeq
+			}
+			if len(f.Evidence) < 5 {
+				f.Evidence = append(f.Evidence, FindingEvidence{
+					Seq:        agg.evSeq,
+					SourcePath: agg.evSourcePath,
+					Line:       agg.evLine,
+					Text:       fmt.Sprintf("%s in %s forced %d times", agg.scope.WorkPackage, agg.scope.MissionSlug, agg.count),
+				})
+			}
+		}
+		byID[f.ID] = f
 	}
 	// addOpFinding records one op-scoped finding, single-sourcing the byID upsert +
 	// scope/evidence append shared by the op detectors below.
