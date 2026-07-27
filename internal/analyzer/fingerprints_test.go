@@ -1,6 +1,9 @@
 package analyzer
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
 // TestFingerprintRulesAllScoped enforces the §7.1 explicit-scope gate: every text
 // pattern in failureRules must declare an output or diagnostic scope. An unscoped
@@ -296,6 +299,213 @@ func TestFingerprintForcedTransitionStructural(t *testing.T) {
 	for _, kind := range []string{"json", "jsonl_transcript", "op_jsonl", "mission_meta", ""} {
 		if got := classifyFailuresWithChannels("", "", kind, forced, nil); failureListHas(got, "forced_transition") {
 			t.Fatalf("forced override from non-live-event kind %q must NOT classify: %#v", kind, got)
+		}
+	}
+}
+
+// failureReason returns the Reason of the first fingerprint with the given id, or "".
+func failureReason(failures []FailureFingerprint, id string) string {
+	for _, f := range failures {
+		if f.ID == id {
+			return f.Reason
+		}
+	}
+	return ""
+}
+
+// TestFingerprintReviewRejectedChangesRequested pins #42's review_rejected extension:
+// (2) evidence.review.verdict widened to changes_requested, (3) the review_result.verdict
+// location that actually carries changes_requested in the corpus, and (4) the lexical
+// rollback fallback for verdictless rejections gated to a backward transition out of
+// in_review. Channels are empty throughout to prove structural detection.
+func TestFingerprintReviewRejectedChangesRequested(t *testing.T) {
+	// (a) review_result.verdict == changes_requested (the primary corpus signal — the
+	// pre-#42 detector fired zero on real data because this location was unread).
+	rr := map[string]any{
+		"from_lane":     "in_review",
+		"to_lane":       "planned",
+		"review_result": map[string]any{"reviewer": "unknown", "verdict": "changes_requested"},
+	}
+	if got := classifyFailuresWithChannels("", "", "mission_status_events", rr, nil); !failureListHas(got, "review_rejected") {
+		t.Fatalf("review_result.verdict=changes_requested must classify review_rejected: %#v", got)
+	}
+
+	// (b) evidence.review.verdict widened to also match changes_requested (was rejected-only).
+	ev := map[string]any{"evidence": map[string]any{"review": map[string]any{"verdict": "changes_requested"}}}
+	if got := classifyFailuresWithChannels("", "", "mission_status_events", ev, nil); !failureListHas(got, "review_rejected") {
+		t.Fatalf("evidence.review.verdict=changes_requested must classify review_rejected: %#v", got)
+	}
+
+	// (c) Lexical rollback: a WP kicked back from in_review to a backward lane whose reason
+	// names a rejection but carries NO verdict field. These verdictless rejections are the
+	// quantified recall gap (~15 corpus events whose only signal is the reason text).
+	for _, reason := range []string{
+		"Review rejected: review artifact fixture path/name mismatch",
+		"Changes requested: git diff --check reports blank lines at EOF",
+		"backward rewind: in_review -> in_progress: Review REJECTED: 17 mypy errors",
+		"Codex WP01 cycle 1 reject: absolute import breaks packaging",
+		"status note | Review reject (cycle 1/3) — findings pending", // compound |-segment
+	} {
+		obj := map[string]any{"from_lane": "in_review", "to_lane": "planned", "reason": reason}
+		if got := classifyFailuresWithChannels("", "", "mission_status_events", obj, nil); !failureListHas(got, "review_rejected") {
+			t.Fatalf("verdictless rollback reason %q must classify review_rejected: %#v", reason, got)
+		}
+	}
+
+	// (d) Lexical gate — WRONG LANE: the same reject token on an APPROVED outcome (the
+	// exact false-positive class the whole-corpus token match hits, ~121 events) must NOT
+	// classify. Only a backward transition out of in_review admits the lexical path.
+	approvedAfterFixes := map[string]any{
+		"from_lane": "in_review",
+		"to_lane":   "approved",
+		"reason":    "approved after changes requested were addressed",
+	}
+	if got := classifyFailuresWithChannels("", "", "mission_status_events", approvedAfterFixes, nil); failureListHas(got, "review_rejected") {
+		t.Fatalf("reject token on an in_review->approved outcome must NOT classify: %#v", got)
+	}
+
+	// (e) Lexical gate — WRONG SOURCE LANE: a reject-shaped reason on a transition that
+	// did not originate from in_review must NOT classify via the lexical path.
+	notFromReview := map[string]any{
+		"from_lane": "in_progress",
+		"to_lane":   "planned",
+		"reason":    "Rejected: dropped a test based on incorrect assumptions",
+	}
+	if got := classifyFailuresWithChannels("", "", "mission_status_events", notFromReview, nil); failureListHas(got, "review_rejected") {
+		t.Fatalf("reject reason not originating from in_review must NOT classify: %#v", got)
+	}
+
+	// (f) A benign backward move out of in_review with NO reject token must NOT classify
+	// (conservative: manual move-task / re-implementation are not flagged as rejections).
+	benign := map[string]any{"from_lane": "in_review", "to_lane": "planned", "reason": "move-task: in_review -> planned"}
+	if got := classifyFailuresWithChannels("", "", "mission_status_events", benign, nil); failureListHas(got, "review_rejected") {
+		t.Fatalf("backward move without a rejection token must NOT classify: %#v", got)
+	}
+
+	// (g) SOURCE-KIND GATE: review_result.verdict is a generic field a plain .json could
+	// carry, so a non-live-event source must NOT classify structurally.
+	for _, kind := range []string{"json", "jsonl_transcript", "op_jsonl", "mission_meta", ""} {
+		if got := classifyFailuresWithChannels("", "", kind, rr, nil); failureListHas(got, "review_rejected") {
+			t.Fatalf("review_result.verdict=changes_requested from non-live-event kind %q must NOT classify: %#v", kind, got)
+		}
+	}
+}
+
+// TestFingerprintReviewerSelfApproval pins #42's governance detector: a
+// ReviewerSelfApproval lifecycle event (event_type + nested payload envelope) classifies
+// as reviewer_self_approval, carrying the intended_reviewer/implementing_actor/failure_reason
+// attribution read defensively from payload.
+func TestFingerprintReviewerSelfApproval(t *testing.T) {
+	obj := map[string]any{
+		"event_type": "ReviewerSelfApproval",
+		"payload": map[string]any{
+			"intended_reviewer":  "independent reviewer",
+			"implementing_actor": "user",
+			"fallback_approved":  true,
+			"failure_reason":     "No separate reviewer available in this session.",
+		},
+	}
+	got := classifyFailuresWithChannels("", "", "mission_status_events", obj, nil)
+	if !failureListHas(got, "reviewer_self_approval") {
+		t.Fatalf("ReviewerSelfApproval must classify reviewer_self_approval: %#v", got)
+	}
+	if r := failureReason(got, "reviewer_self_approval"); !strings.Contains(r, "intended_reviewer=independent reviewer") || !strings.Contains(r, "failure_reason=") {
+		t.Fatalf("reviewer_self_approval reason must carry payload attribution in fixed order, got %q", r)
+	}
+
+	// Defensive: a ReviewerSelfApproval with no payload must still classify (not panic).
+	bare := map[string]any{"event_type": "ReviewerSelfApproval"}
+	if got := classifyFailuresWithChannels("", "", "mission_status_events", bare, nil); !failureListHas(got, "reviewer_self_approval") {
+		t.Fatalf("ReviewerSelfApproval with no payload must still classify: %#v", got)
+	}
+
+	// A different lifecycle event_type must NOT classify.
+	other := map[string]any{"event_type": "WPCreated", "payload": map[string]any{"wp_id": "WP01"}}
+	if got := classifyFailuresWithChannels("", "", "mission_status_events", other, nil); failureListHas(got, "reviewer_self_approval") {
+		t.Fatalf("event_type=WPCreated must NOT classify reviewer_self_approval: %#v", got)
+	}
+
+	// SOURCE-KIND GATE.
+	for _, kind := range []string{"json", "jsonl_transcript", "op_jsonl", "mission_meta", ""} {
+		if got := classifyFailuresWithChannels("", "", kind, obj, nil); failureListHas(got, "reviewer_self_approval") {
+			t.Fatalf("ReviewerSelfApproval from non-live-event kind %q must NOT classify: %#v", kind, got)
+		}
+	}
+}
+
+// TestFingerprintMissionReopened pins #42's mission_reopened detector: a MissionReopened
+// lifecycle event classifies, with reopened_by/reason read defensively from payload.
+func TestFingerprintMissionReopened(t *testing.T) {
+	obj := map[string]any{
+		"event_type": "MissionReopened",
+		"payload": map[string]any{
+			"reopened_by":   "kent",
+			"reason":        "follow-up defect found after merge",
+			"cleared_merge": map[string]any{"merged_at": "2026-07-01T00:00:00Z"},
+		},
+	}
+	got := classifyFailuresWithChannels("", "", "mission_status_events", obj, nil)
+	if !failureListHas(got, "mission_reopened") {
+		t.Fatalf("MissionReopened must classify mission_reopened: %#v", got)
+	}
+	if r := failureReason(got, "mission_reopened"); !strings.Contains(r, "reopened_by=kent") {
+		t.Fatalf("mission_reopened reason must carry reopened_by, got %q", r)
+	}
+
+	// Defensive: no payload must still classify (0 corpus occurrences → fields optional).
+	bare := map[string]any{"event_type": "MissionReopened"}
+	if got := classifyFailuresWithChannels("", "", "mission_status_events", bare, nil); !failureListHas(got, "mission_reopened") {
+		t.Fatalf("MissionReopened with no payload must still classify: %#v", got)
+	}
+
+	// SOURCE-KIND GATE.
+	for _, kind := range []string{"json", "jsonl_transcript", "op_jsonl", "mission_meta", ""} {
+		if got := classifyFailuresWithChannels("", "", kind, obj, nil); failureListHas(got, "mission_reopened") {
+			t.Fatalf("MissionReopened from non-live-event kind %q must NOT classify: %#v", kind, got)
+		}
+	}
+}
+
+// TestFingerprintLaneExcursion pins #42's lane_excursion detector: entering a blocked or
+// canceled lane (to_lane) classifies; the happy-path lanes do not; and — critically —
+// the detector fires on ENTRY only, so a recovery edge OUT of blocked (from_lane=blocked,
+// to_lane=in_progress) does NOT re-fire.
+func TestFingerprintLaneExcursion(t *testing.T) {
+	for _, tc := range []struct {
+		lane   string
+		reason string
+	}{
+		{"blocked", "worktree_alloc_failed"},
+		{"canceled", "Mission design oversight: WP02 requires WP01 merged to main"},
+	} {
+		obj := map[string]any{"from_lane": "planned", "to_lane": tc.lane, "reason": tc.reason}
+		got := classifyFailuresWithChannels("", "", "mission_status_events", obj, nil)
+		if !failureListHas(got, "lane_excursion") {
+			t.Fatalf("to_lane=%q must classify lane_excursion: %#v", tc.lane, got)
+		}
+		if r := failureReason(got, "lane_excursion"); !strings.Contains(r, tc.lane) || !strings.Contains(r, tc.reason) {
+			t.Fatalf("lane_excursion reason must carry lane and reason, got %q", r)
+		}
+	}
+
+	// Recovery edge OUT of blocked (from_lane=blocked) must NOT classify — to_lane is the
+	// happy-path lane, so entry-only detection avoids double-counting one incident.
+	recovery := map[string]any{"from_lane": "blocked", "to_lane": "in_progress", "reason": "unblocked"}
+	if got := classifyFailuresWithChannels("", "", "mission_status_events", recovery, nil); failureListHas(got, "lane_excursion") {
+		t.Fatalf("recovery from blocked (to_lane=in_progress) must NOT classify lane_excursion: %#v", got)
+	}
+
+	// Happy-path transition must NOT classify.
+	happy := map[string]any{"from_lane": "in_progress", "to_lane": "for_review", "reason": "Ready for review"}
+	if got := classifyFailuresWithChannels("", "", "mission_status_events", happy, nil); failureListHas(got, "lane_excursion") {
+		t.Fatalf("happy-path transition must NOT classify lane_excursion: %#v", got)
+	}
+
+	// SOURCE-KIND GATE.
+	blocked := map[string]any{"to_lane": "blocked", "reason": "worktree_alloc_failed"}
+	for _, kind := range []string{"json", "jsonl_transcript", "op_jsonl", "mission_meta", ""} {
+		if got := classifyFailuresWithChannels("", "", kind, blocked, nil); failureListHas(got, "lane_excursion") {
+			t.Fatalf("to_lane=blocked from non-live-event kind %q must NOT classify: %#v", kind, got)
 		}
 	}
 }

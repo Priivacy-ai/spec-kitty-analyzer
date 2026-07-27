@@ -515,6 +515,60 @@ func isReasonWordByte(b byte) bool {
 	return b == '_' || (b >= 'a' && b <= 'z') || (b >= '0' && b <= '9')
 }
 
+// rejectionVerdicts are the review-verdict values meaning "not approved — the work
+// package bounces back". spec-kitty's verdict vocabulary is
+// {approved, changes_requested, commented, rejected, unknown}; only these two are a
+// review rejection. Used by the review_rejected structural detector against BOTH
+// verdict locations that appear on mission_status_events (evidence.review.verdict and
+// review_result.verdict). In the corpus evidence.review.verdict is only ever "approved"
+// and top-level review_status never appears, so review_result.verdict==changes_requested
+// is the one condition that actually fires review_rejected on real data.
+var rejectionVerdicts = map[string]bool{"rejected": true, "changes_requested": true}
+
+// isRejectionVerdict reports whether v (a review verdict field) is a review rejection.
+func isRejectionVerdict(v string) bool {
+	return rejectionVerdicts[strings.ToLower(strings.TrimSpace(v))]
+}
+
+// reviewBackwardLanes are the lanes a WP is sent BACK to when review kicks it below
+// in_review on the happy path. Used with from_lane==in_review to gate the lexical
+// reviewRejectionReason match — the lane gate is what makes that loose token match safe.
+var reviewBackwardLanes = map[string]bool{"planned": true, "in_progress": true, "for_review": true}
+
+// reviewRejectionReasonTokens are the controlled substrings spec-kitty reviewers use in
+// the move-task reason when kicking a WP back from review WITHOUT a machine-readable
+// verdict field. Empirically ~15 corpus rejections carry the signal ONLY here ("Review
+// rejected: …", "Changes requested: …", "Codex … reject", "Review reject (cycle …)").
+// Best-effort lexical, same tier as forcedOverridePrefixes; the durable typed signal is
+// the fault-event contract (analyzer #44).
+var reviewRejectionReasonTokens = []string{"reject", "changes requested"}
+
+// reviewRejectionReason reports whether a move-task reason names an explicit review
+// rejection. It is a LOOSE token match and MUST be used only under the
+// from_lane==in_review + backward-lane gate in the review_rejected detector: matched
+// against the whole corpus it is dirty (the same tokens appear in ~121 approved-outcome
+// reasons such as "approved after changes requested were addressed"), but gated to a
+// backward transition out of in_review it is 18/18 true rejections with zero false
+// positives. Case-insensitive; matched per "|"-joined segment so a compound status note
+// ("status | Review rejected: …") does not mask the rejection note.
+func reviewRejectionReason(reason string) bool {
+	for seg := range strings.SplitSeq(reason, "|") {
+		s := strings.ToLower(seg)
+		for _, tok := range reviewRejectionReasonTokens {
+			if strings.Contains(s, tok) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// excursionLanes are the off-happy-path lanes whose ENTRY (to_lane) is a lane_excursion
+// fault: a WP that could not proceed (blocked — e.g. worktree_alloc_failed) or was
+// abandoned (canceled). The happy path is
+// planned→claimed→in_progress→for_review→in_review→approved→done.
+var excursionLanes = map[string]bool{"blocked": true, "canceled": true}
+
 // findFailureRule returns the failureRules entry with the given id. It is used
 // where a structural detection must emit the SAME finding as its text-rule
 // counterpart (review_rejected) without duplicating the rule's title/severity/
@@ -633,11 +687,33 @@ func classifyFailuresWithChannels(outputText, diagnosticText, sourceKind string,
 		// (review_status==has_feedback, verdict==rejected); the seen[] dedup keeps an
 		// event matched by both this and the text rule at ONE finding. findFailureRule
 		// keeps the rule's title/severity/recovery single-sourced.
+		// Four explicit, deterministic paths (first match wins; seen[] keeps one finding):
+		//  1. top-level review_status == has_feedback (never present in the corpus, kept
+		//     for completeness/other producers).
+		//  2. evidence.review.verdict ∈ {rejected, changes_requested} (widened from
+		//     rejected-only; corpus has only "approved" here today).
+		//  3. review_result.verdict ∈ {rejected, changes_requested} — the verdict location
+		//     that actually carries changes_requested (29 corpus events); the primary win.
+		//  4. Lexical rollback: a WP kicked back from in_review to a backward lane whose
+		//     reason names a review rejection (reviewRejectionReason). Closes the quantified
+		//     recall gap of ~15 verdictless rejections whose only signal is the reason text;
+		//     the from_lane==in_review + backward-lane gate is what makes the loose token
+		//     match safe (see reviewRejectionReason). This REPLACES the issue's
+		//     in_review→in_progress + review_ref heuristic, which the corpus shows is noise
+		//     (review_ref is present on ~1791 edges including approved ones).
 		if rule, ok := findFailureRule("review_rejected"); ok && isMissionStatusEventKind(sourceKind) {
 			if rs, ok := obj["review_status"].(string); ok && strings.EqualFold(strings.TrimSpace(rs), "has_feedback") {
 				add(rule, "top-level review_status field is has_feedback")
-			} else if v := nestedString(obj, "evidence", "review", "verdict"); strings.EqualFold(strings.TrimSpace(v), "rejected") {
-				add(rule, "evidence.review.verdict field is rejected")
+			} else if v := nestedString(obj, "evidence", "review", "verdict"); isRejectionVerdict(v) {
+				add(rule, "evidence.review.verdict field is "+strings.ToLower(strings.TrimSpace(v)))
+			} else if v := nestedString(obj, "review_result", "verdict"); isRejectionVerdict(v) {
+				add(rule, "review_result.verdict field is "+strings.ToLower(strings.TrimSpace(v)))
+			} else if from, _ := obj["from_lane"].(string); strings.EqualFold(strings.TrimSpace(from), "in_review") {
+				if to, _ := obj["to_lane"].(string); reviewBackwardLanes[strings.ToLower(strings.TrimSpace(to))] {
+					if reason, _ := obj["reason"].(string); reviewRejectionReason(reason) {
+						add(rule, "review rejection kicked the work package back from in_review; reason: "+strings.TrimSpace(reason))
+					}
+				}
 			}
 		}
 
@@ -667,6 +743,83 @@ func classifyFailuresWithChannels(outputText, diagnosticText, sourceKind string,
 						recovery: "Confirm the forced transition was intended: a forced override bypasses the normal lane gate and usually marks recovery from a stuck or mis-tracked work package. If unexpected, investigate why the WP could not advance normally.",
 					}, "forced override reason: "+strings.TrimSpace(reason))
 				}
+			}
+		}
+
+		// Lifecycle-event and lane-excursion faults (governance interventions +
+		// off-happy-path signals). SOURCE-KIND GATED to mission_status_events like the
+		// detectors above. Lifecycle events use the event_type + nested payload envelope
+		// (distinct from the top-level from_lane/to_lane/verdict lane events), so their
+		// attribution fields are read from payload, each optional/defensive.
+		if isMissionStatusEventKind(sourceKind) {
+			switch et, _ := obj["event_type"].(string); et {
+			case "ReviewerSelfApproval":
+				// A governance fault distinct from reviewer_failed (a reviewer crash): the
+				// intended INDEPENDENT reviewer was unavailable and the implementing actor
+				// self-approved via fallback (payload.fallback_approved) — no independent
+				// review occurred. Reason built in fixed field order (deterministic).
+				parts := make([]string, 0, 3)
+				if v := strings.TrimSpace(nestedString(obj, "payload", "intended_reviewer")); v != "" {
+					parts = append(parts, "intended_reviewer="+v)
+				}
+				if v := strings.TrimSpace(nestedString(obj, "payload", "implementing_actor")); v != "" {
+					parts = append(parts, "implementing_actor="+v)
+				}
+				if v := strings.TrimSpace(nestedString(obj, "payload", "failure_reason")); v != "" {
+					parts = append(parts, "failure_reason="+v)
+				}
+				reason := "reviewer self-approval via fallback"
+				if len(parts) > 0 {
+					reason += " (" + strings.Join(parts, ", ") + ")"
+				}
+				add(failureRule{
+					id:       "reviewer_self_approval",
+					title:    "Reviewer self-approval (independent review bypassed)",
+					severity: "high",
+					recovery: "An independent review did not occur — the intended reviewer was unavailable and the implementing actor self-approved via fallback. Re-review the work package independently if this bypass was not intended.",
+				}, reason)
+			case "MissionReopened":
+				// A completed/merged mission forced back to an actionable state. Real
+				// spec-kitty lifecycle event (0 corpus occurrences today), so payload fields
+				// are read defensively. Fixed field order.
+				parts := make([]string, 0, 2)
+				if v := strings.TrimSpace(nestedString(obj, "payload", "reopened_by")); v != "" {
+					parts = append(parts, "reopened_by="+v)
+				}
+				if v := strings.TrimSpace(nestedString(obj, "payload", "reason")); v != "" {
+					parts = append(parts, "reason="+v)
+				}
+				reason := "completed/merged mission returned to an actionable state"
+				if len(parts) > 0 {
+					reason += " (" + strings.Join(parts, ", ") + ")"
+				}
+				add(failureRule{
+					id:       "mission_reopened",
+					title:    "Mission reopened after completion",
+					severity: "medium",
+					recovery: "A completed/merged mission was reopened. Confirm the reopen was intended and that downstream state (merge markers, work-package lanes) was repositioned correctly.",
+				}, reason)
+			}
+
+			// lane_excursion: a work package left the happy path
+			// (planned→claimed→in_progress→for_review→in_review→approved→done) into an
+			// off-path lane. Detected on ENTRY (to_lane) ONLY — flagging from_lane too
+			// would double-count one incident and label the recovery edge as a new fault.
+			// blocked is rare (~0.2% of transitions, non-systemic: worktree_alloc_failed,
+			// arbiter reversal); canceled is a WP abandonment (a design oversight in the
+			// corpus). One finding either way; the reason carries the lane + block reason.
+			if to, _ := obj["to_lane"].(string); excursionLanes[strings.ToLower(strings.TrimSpace(to))] {
+				lane := strings.ToLower(strings.TrimSpace(to))
+				reason := "work package entered the " + lane + " lane"
+				if r, _ := obj["reason"].(string); strings.TrimSpace(r) != "" {
+					reason += "; reason: " + strings.TrimSpace(r)
+				}
+				add(failureRule{
+					id:       "lane_excursion",
+					title:    "Work package entered blocked/canceled lane",
+					severity: "medium",
+					recovery: "A work package left the happy path into a blocked or canceled lane. Investigate why it could not proceed (e.g. worktree_alloc_failed, an unmet dependency, or a design oversight) and whether it was resolved.",
+				}, reason)
 			}
 		}
 	}
