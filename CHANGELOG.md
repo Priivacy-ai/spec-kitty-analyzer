@@ -10,12 +10,49 @@ by the release workflow (see `RELEASE_CHECKLIST.md`).
 
 ## [Unreleased]
 
+### Added
+
+- **Forced-override workflow-fault detection (#41).** Reports now surface `forced_transition` — an
+  explicit operator/agent override of the mission state machine, recorded in the mission event log
+  (`status.events.jsonl`) and impossible to reconstruct from a transcript alone. A bare `force=true`
+  is *not* the signal: the corpus sets it on ~16% of events, mostly routine systemic writes
+  (canonical bootstrap, frontmatter migration, review-claim). The detector isolates the
+  intervention subset via spec-kitty's controlled override-reason vocabulary, matched per
+  ` | `-joined reason segment. Structural, source-kind-gated to the mission event log, so it adds
+  no text-match false-positive risk.
+- **Governance-intervention and lane-excursion fault detection (#42).** Four more log-unique signals
+  mined from the mission event log: `reviewer_self_approval` (an independent review was bypassed —
+  the implementing actor self-approved), `mission_reopened` (a completed/merged mission returned to
+  an actionable state), and `lane_excursion` (a work package entered a `blocked`/`canceled` lane).
+  `review_rejected` is also extended to read `review_result.verdict`, to treat
+  `changes_requested` as a rejection, and to catch verdictless rejections via an event-log-gated
+  rollback fallback. All are structural reads on the same gated attach point.
+- **Op-lifecycle outcome-fault detection (#43).** Op logs (`kitty-ops/<invocation-id>.jsonl`) now
+  yield `op_failed` (an Op completed with `outcome=failed`) and `op_abandoned` (an Op completed with
+  `outcome=abandoned`; when the doctor swept it, `closed_by=doctor_sweep` rides the evidence) —
+  distinct from the existing `open_op_orphan`.
+- **Repeatedly-forced work-package detection (#48).** A `repeatedly_forced_work_package` finding
+  fires when a single work package is force-overridden two or more times. One forced override is
+  routine recovery; repeated overrides flag a WP that kept failing to advance through the normal
+  lane gate. Counted from the already-filtered genuine `forced_transition` events per
+  `(mission, wp)` — not the systemic-force-polluted `status.json` `force_count` — and deduplicated
+  by event id so a mirrored event line cannot inflate a single override into a false repeat.
+
 ### Fixed
 
 - **Codex `sed -n` reads no longer leak file content into failure scanning (#37).** A read-only
   `sed` (e.g. `sed -n 'M,Np' file`) is now recognized as an inspection read, so failure/crash tokens
   *inside* a file that codex dumps via `sed` no longer produce false detections — across any tier.
   Any mutating/writing/executing `sed` form (`-i`, `w`/`r`/`e`, `s///w`, …) is still scanned.
+- **Abandoned Ops are no longer reported as `done` (#43).** Op outcome and `closed_by` are now read
+  structurally from the op-log JSON instead of from flattened text, where a `completed` event
+  matched the `done` branch before the abandoned override was ever seen. A completed event always
+  closes its Op, even with a null outcome.
+- **`kitty-ops/lifecycle.jsonl` no longer mints a phantom Op and a false `open_op_orphan` (#43).**
+  Op-log identity is now a single predicate: the basename must be a valid invocation id
+  (26-char ULID or 32-char hex) and the file a direct child of a `kitty-ops/` directory. The old
+  broad path match is gone, and op id now derives from the authoritative path basename, so a
+  content `invocation_id` can no longer reattach an event to a different Op.
 
 ## [0.3.0] - 2026-07-14
 
