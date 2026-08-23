@@ -12,6 +12,7 @@
   "purpose_context": "Today the analyzer's version is a hardcoded Go constant that must be manually bumped to match each release tag, and shipped binaries carry no commit or build-date provenance. This mission injects version, commit SHA, and build date at release-build time via linker flags and surfaces them as a structured build object in the version command and report JSON, so every binary is traceable to the commit that produced it and no release ships a mismatched version again. Closes issues #19 and #21.",
   "purpose_tldr": "Binaries report their real version, commit, and build date from the release build instead of a hand-edited constant.",
   "slug": "build-version-injection-01KWMBB8",
+  "status_phase": "1",
   "target_branch": "feat/build-version-injection",
   "topology": "coord",
   "vcs": "git",
