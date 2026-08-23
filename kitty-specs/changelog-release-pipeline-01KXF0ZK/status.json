@@ -22,28 +22,48 @@
       "force_count": 0,
       "lane": "done",
       "last_event_id": "01KXF4TS6KAJW39XNRDR60MG0Q",
-      "last_transition_at": "2026-07-14T01:45:58.227230+00:00"
+      "last_transition_at": "2026-07-14T01:45:58.227230+00:00",
+      "review_result": {
+        "reference": "Review passed: grammar parser-compatible, content sourced, dates correct, 0.3.0 breaking notice intact",
+        "reviewer": "Kent Gale",
+        "verdict": "approved"
+      }
     },
     "WP02": {
       "actor": "merge",
       "force_count": 0,
       "lane": "done",
       "last_event_id": "01KXF4TV4XB02DTQP2EQ8SNGQH",
-      "last_transition_at": "2026-07-14T01:46:00.221704+00:00"
+      "last_transition_at": "2026-07-14T01:46:00.221704+00:00",
+      "review_result": {
+        "reference": "Review passed: build/vet/gofmt/test/race clean; contract behavior verified via e2e dry-run; stdlib-only, go.mod unchanged; all Codex-flagged edges tested (malformed-heading error, V==T inter-release, tag self-exclusion, compact-only prerelease)",
+        "reviewer": "Kent Gale",
+        "verdict": "approved"
+      }
     },
     "WP03": {
       "actor": "merge",
       "force_count": 0,
       "lane": "done",
       "last_event_id": "01KXF4TWM4B4V7PE9WWCJQ5BFK",
-      "last_transition_at": "2026-07-14T01:46:01.732554+00:00"
+      "last_transition_at": "2026-07-14T01:46:01.732554+00:00",
+      "review_result": {
+        "reference": "Review passed: all DoD assertions verified (fetch-depth:0, always-create body, tag-only validate+extract+fail-closed guard, body_path, auto-notes dropped, readiness path filter incl release.yml, ci cross-build tools/release); YAML valid; triple-check binary read proven in T017",
+        "reviewer": "Kent Gale",
+        "verdict": "approved"
+      }
     },
     "WP04": {
       "actor": "merge",
       "force_count": 0,
       "lane": "done",
       "last_event_id": "01KXF4TY32WE94A2WZ7FDFQJ80",
-      "last_transition_at": "2026-07-14T01:46:03.234659+00:00"
+      "last_transition_at": "2026-07-14T01:46:03.234659+00:00",
+      "review_result": {
+        "reference": "Review passed: commands+error messages match shipped CLI (T019), tag-as-SSOT framing, out-of-scope registry pieces only cited as deliberate exclusions",
+        "reviewer": "Kent Gale",
+        "verdict": "approved"
+      }
     }
   }
 }
