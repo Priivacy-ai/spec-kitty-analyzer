@@ -54,3 +54,11 @@ report.pdf
 
 # stray analyzer output when analyze is run without --out
 spec-kitty-analyzer-report.json
+.kittify/encoding-provenance/
+kitty-ops/ops-index.jsonl
+.kittify/derived/
+.kittify/migrations/
+.kittify/logs/
+.agents/skills/
+.kittify/skills-manifest.json
+.kittify/.kitty.env

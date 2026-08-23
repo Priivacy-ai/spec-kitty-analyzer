@@ -10,3 +10,10 @@ agents:
   - claude
   auto_commit: true
   lint_on_edit: false
+charter: .kittify/charter/charter.yaml
+env_file: ${SPEC_KITTY_HOME}/.kitty.env
+mission_type_activations:
+- software-dev
+- documentation
+- research
+- plan

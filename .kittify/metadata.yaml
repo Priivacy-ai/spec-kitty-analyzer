@@ -3,13 +3,105 @@
 # DO NOT EDIT MANUALLY
 
 spec_kitty:
-  version: 3.2.3
+  version: 3.2.6rc3
   initialized_at: '2026-06-25T14:36:54.565873'
-  last_upgraded_at: '2026-06-26T13:24:04.437380'
+  last_upgraded_at: '2026-08-23T05:47:08.453772+00:00'
   schema_version: 3
 environment:
   python_version: 3.13.14
   platform: darwin
   platform_version: macOS-26.5.1-x86_64-i386-64bit-Mach-O
 migrations:
-  applied: []
+  applied:
+  - id: 3.2.3_encoding_provenance_gitignore_backfill
+    applied_at: '2026-08-23T05:47:05.662258+00:00'
+    result: success
+    notes: 'Added gitignore entries: .kittify/encoding-provenance/, kitty-ops/ops-index.jsonl;
+      Untracked local runtime file: .kittify/encoding-provenance/global.jsonl'
+  - id: 3.2.4_derived_mission_views_gitignore_backfill
+    applied_at: '2026-08-23T05:47:05.667901+00:00'
+    result: success
+    notes: 'Added gitignore entry: .kittify/derived/'
+  - id: 3.2.4_runtime_dirs_gitignore_backfill
+    applied_at: '2026-08-23T05:47:05.670688+00:00'
+    result: success
+    notes: 'Added gitignore entries: .kittify/migrations/, .kittify/logs/'
+  - id: 3.2.5_agents_skills_gitignore_backfill
+    applied_at: '2026-08-23T05:47:05.672999+00:00'
+    result: success
+    notes: 'Added gitignore entry: .agents/skills/; Added gitignore entry: .kittify/skills-manifest.json'
+  - id: 3.2.6_decisions_event_log_merge_driver
+    applied_at: '2026-08-23T05:47:05.708978+00:00'
+    result: success
+    notes: 'Added .gitattributes entry: kitty-specs/**/decisions.events.jsonl merge=spec-kitty-event-log'
+  - id: 3.2.6_gate_artifact_merge_drivers
+    applied_at: '2026-08-23T05:47:05.842632+00:00'
+    result: success
+    notes: 'Added .gitattributes entry: kitty-specs/**/acceptance-matrix.json merge=spec-kitty-acceptance-matrix;
+      Configured git merge.spec-kitty-acceptance-matrix.name; Configured git merge.spec-kitty-acceptance-matrix.driver;
+      Added .gitattributes entry: kitty-specs/**/issue-matrix.md merge=spec-kitty-issue-matrix;
+      Configured git merge.spec-kitty-issue-matrix.name; Configured git merge.spec-kitty-issue-matrix.driver'
+  - id: 3.2.6_issue_matrix_driver_repoint
+    applied_at: '2026-08-23T05:47:05.901195+00:00'
+    result: success
+    notes: 'Added .gitattributes entry: kitty-specs/**/issue-matrix.json merge=spec-kitty-issue-matrix;
+      Configured git merge.spec-kitty-issue-matrix.name'
+  - id: 3.2.6_meta_traces_merge_drivers
+    applied_at: '2026-08-23T05:47:06.038886+00:00'
+    result: success
+    notes: 'Added .gitattributes entry: kitty-specs/**/meta.json merge=spec-kitty-meta;
+      Configured git merge.spec-kitty-meta.name; Configured git merge.spec-kitty-meta.driver;
+      Added .gitattributes entry: kitty-specs/**/traces/*.md merge=spec-kitty-traces;
+      Configured git merge.spec-kitty-traces.name; Configured git merge.spec-kitty-traces.driver'
+  - id: 3.2.6_retire_rtk_search_tooling
+    applied_at: '2026-08-23T05:47:06.102011+00:00'
+    result: skipped
+    notes: Not applicable
+  - id: 3.2.7_review_cycle_merge_driver
+    applied_at: '2026-08-23T05:47:06.171521+00:00'
+    result: success
+    notes: 'Added .gitattributes entry: kitty-specs/**/tasks/*/review-cycle-*.md merge=spec-kitty-review-cycle;
+      Configured git merge.spec-kitty-review-cycle.name; Configured git merge.spec-kitty-review-cycle.driver'
+  - id: normalize_activation_absence
+    applied_at: '2026-08-23T05:47:06.188930+00:00'
+    result: success
+    notes: 'Normalized absent activation keys to [] in /Users/kentgale/repos/spec-kitty-analyzer/.kittify/config.yaml:
+      [''activated_agent_profiles'', ''activated_directives'', ''activated_glossary_packs'',
+      ''activated_mission_step_contracts'', ''activated_paradigms'', ''activated_procedures'',
+      ''activated_styleguides'', ''activated_tactics'', ''activated_toolguides'']'
+  - id: unify_charter_activation_promote_answers
+    applied_at: '2026-08-23T05:47:07.570393+00:00'
+    result: success
+    notes: Promoted ['001-architectural-integrity-standard', '003-decision-documentation-requirement',
+      '024-locality-of-change', '025-boy-scout-rule', '029-agent-commit-signing-policy',
+      '030-test-and-typecheck-quality-gate', '033-targeted-staging-policy', '034-test-first-development',
+      '036-black-box-integration-testing', '039-lynn-cole-engineering-culture', '040-recurring-bug-structural-intervention']
+      into activated_directives; Promoted ['deep-module-design', 'specification-by-example']
+      into activated_paradigms
+  - id: consolidate_charter_bundle_fold
+    applied_at: '2026-08-23T05:47:07.701016+00:00'
+    result: success
+    notes: 'Composed /Users/kentgale/repos/spec-kitty-analyzer/.kittify/charter/charter.yaml
+      from legacy bundle + config activation; Deleted /Users/kentgale/repos/spec-kitty-analyzer/.kittify/charter/governance.yaml;
+      Deleted /Users/kentgale/repos/spec-kitty-analyzer/.kittify/charter/directives.yaml;
+      Deleted /Users/kentgale/repos/spec-kitty-analyzer/.kittify/charter/metadata.yaml;
+      Deleted /Users/kentgale/repos/spec-kitty-analyzer/.kittify/charter/references.yaml;
+      Updated .kittify/config.yaml: removed activated_* keys, added charter: pointer'
+  - id: runtime_state_backfill
+    applied_at: '2026-08-23T05:47:08.332698+00:00'
+    result: success
+    notes: Seeded 30 event(s) and flipped 5 of 5 mission(s) scanned
+  - id: verdict_provenance_backfill
+    applied_at: '2026-08-23T05:47:08.351766+00:00'
+    result: skipped
+    notes: Not applicable
+  - id: 3.2.8_provision_kitty_env
+    applied_at: '2026-08-23T05:47:08.365371+00:00'
+    result: success
+    notes: 'Created .kittify/.kitty.env; Registered env_file: ${SPEC_KITTY_HOME}/.kitty.env
+      in config.yaml; Added .kittify/.kitty.env to .gitignore; Added .kittify/.kitty.env
+      to .claudeignore'
+  - id: 3.2.7_heal_provenance_paths
+    applied_at: '2026-08-23T05:47:08.447801+00:00'
+    result: skipped
+    notes: Not applicable
