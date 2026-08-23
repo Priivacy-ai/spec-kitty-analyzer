@@ -105,3 +105,12 @@ migrations:
     applied_at: '2026-08-23T05:47:08.447801+00:00'
     result: skipped
     notes: Not applicable
+  - id: 3.2.6rc3_lint_report_gitignore_backfill
+    applied_at: '2026-08-23T07:19:29.968715+00:00'
+    result: success
+    notes: 'Added gitignore entry: .kittify/lint-report.json'
+  - id: 3.2.6rc3_narrow_cursor_gitignore
+    applied_at: '2026-08-23T07:19:29.977280+00:00'
+    result: success
+    notes: 'Removed managed blanket line: ''.cursor/''; Added gitignore entry: .cursor/rules/spec-kitty.mdc;
+      Added gitignore entry: .cursor/commands/; Added gitignore entry: .cursor/skills/'

@@ -29,7 +29,6 @@ report.pdf
 .opencode/
 .windsurf/
 .gemini/
-.cursor/
 .qwen/
 .kilocode/
 .augment/
@@ -62,3 +61,7 @@ kitty-ops/ops-index.jsonl
 .agents/skills/
 .kittify/skills-manifest.json
 .kittify/.kitty.env
+.kittify/lint-report.json
+.cursor/rules/spec-kitty.mdc
+.cursor/commands/
+.cursor/skills/
