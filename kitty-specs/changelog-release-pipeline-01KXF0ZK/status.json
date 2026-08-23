@@ -1,5 +1,5 @@
 {
-  "event_count": 28,
+  "event_count": 32,
   "last_event_id": "01KXF4TY32WE94A2WZ7FDFQJ80",
   "materialized_at": "2026-07-14T01:46:03.234659+00:00",
   "mission_number": "3",
@@ -19,6 +19,7 @@
   "work_packages": {
     "WP01": {
       "actor": "merge",
+      "agent": "claude",
       "force_count": 0,
       "lane": "done",
       "last_event_id": "01KXF4TS6KAJW39XNRDR60MG0Q",
@@ -27,10 +28,13 @@
         "reference": "Review passed: grammar parser-compatible, content sourced, dates correct, 0.3.0 breaking notice intact",
         "reviewer": "Kent Gale",
         "verdict": "approved"
-      }
+      },
+      "shell_pid": 28991,
+      "shell_pid_created_at": "1783991940.541283"
     },
     "WP02": {
       "actor": "merge",
+      "agent": "claude",
       "force_count": 0,
       "lane": "done",
       "last_event_id": "01KXF4TV4XB02DTQP2EQ8SNGQH",
@@ -39,10 +43,13 @@
         "reference": "Review passed: build/vet/gofmt/test/race clean; contract behavior verified via e2e dry-run; stdlib-only, go.mod unchanged; all Codex-flagged edges tested (malformed-heading error, V==T inter-release, tag self-exclusion, compact-only prerelease)",
         "reviewer": "Kent Gale",
         "verdict": "approved"
-      }
+      },
+      "shell_pid": 32509,
+      "shell_pid_created_at": "1783992496.157398"
     },
     "WP03": {
       "actor": "merge",
+      "agent": "claude",
       "force_count": 0,
       "lane": "done",
       "last_event_id": "01KXF4TWM4B4V7PE9WWCJQ5BFK",
@@ -51,10 +58,13 @@
         "reference": "Review passed: all DoD assertions verified (fetch-depth:0, always-create body, tag-only validate+extract+fail-closed guard, body_path, auto-notes dropped, readiness path filter incl release.yml, ci cross-build tools/release); YAML valid; triple-check binary read proven in T017",
         "reviewer": "Kent Gale",
         "verdict": "approved"
-      }
+      },
+      "shell_pid": 35260,
+      "shell_pid_created_at": "1783992898.272637"
     },
     "WP04": {
       "actor": "merge",
+      "agent": "claude",
       "force_count": 0,
       "lane": "done",
       "last_event_id": "01KXF4TY32WE94A2WZ7FDFQJ80",
@@ -63,7 +73,9 @@
         "reference": "Review passed: commands+error messages match shipped CLI (T019), tag-as-SSOT framing, out-of-scope registry pieces only cited as deliberate exclusions",
         "reviewer": "Kent Gale",
         "verdict": "approved"
-      }
+      },
+      "shell_pid": 37079,
+      "shell_pid_created_at": "1783993123.149862"
     }
   }
 }
