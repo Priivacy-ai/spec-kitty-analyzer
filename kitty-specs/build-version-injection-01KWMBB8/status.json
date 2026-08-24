@@ -1,5 +1,5 @@
 {
-  "event_count": 31,
+  "event_count": 34,
   "last_event_id": "01KWMQ26VZ7T4XZ0R482Z40MRM",
   "materialized_at": "2026-07-03T19:25:06.303610+00:00",
   "mission_number": "2",
@@ -19,27 +19,65 @@
   "work_packages": {
     "WP01": {
       "actor": "merge",
+      "agent": "codex",
       "force_count": 1,
       "lane": "done",
       "last_event_id": "01KWMQ233HZECHDXVE1JWN5HJ9",
       "last_transition_at": "2026-07-03T19:25:02.449369+00:00",
-      "review_result": null
+      "review_result": null,
+      "shell_pid": 6731,
+      "subtasks": {
+        "T001": "done",
+        "T002": "done",
+        "T003": "done",
+        "T004": "done",
+        "T005": "done",
+        "T006": "done",
+        "T007": "done"
+      },
+      "tracker_refs": [
+        "#19",
+        "#21"
+      ]
     },
     "WP02": {
       "actor": "merge",
+      "agent": "codex",
       "force_count": 0,
       "lane": "done",
       "last_event_id": "01KWMQ258EXDBQMY20J7G5MERD",
       "last_transition_at": "2026-07-03T19:25:04.654167+00:00",
-      "review_result": null
+      "review_result": null,
+      "shell_pid": 9126,
+      "subtasks": {
+        "T008": "done",
+        "T009": "done",
+        "T010": "done",
+        "T011": "done"
+      },
+      "tracker_refs": [
+        "#19",
+        "#21"
+      ]
     },
     "WP03": {
       "actor": "merge",
+      "agent": "codex",
       "force_count": 1,
       "lane": "done",
       "last_event_id": "01KWMQ26VZ7T4XZ0R482Z40MRM",
       "last_transition_at": "2026-07-03T19:25:06.303610+00:00",
-      "review_result": null
+      "review_result": null,
+      "shell_pid": 12430,
+      "subtasks": {
+        "T012": "planned",
+        "T013": "planned",
+        "T014": "planned"
+      },
+      "tracker_refs": [
+        "#19",
+        "#21"
+      ]
     }
   }
 }
