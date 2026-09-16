@@ -6,7 +6,7 @@
       "output_path": ".claude/agents/analyst-annie.md",
       "profile_urn": "agent_profile:analyst-annie",
       "projection_version": 1,
-      "source_hash": "8ed372b0e8c6e02cac1cb6c2c675a918d82d29d3861aa737cada054036658b51",
+      "source_hash": "ec2b0fc1c4770c89e584adebeae416b943493df2753a73f7a60169471e5ee91d",
       "source_layer": "builtin",
       "source_path": "${SPEC_KITTY_PACKS_ROOT}/built-in/agent_profiles/analyst-annie.agent.yaml",
       "tool_key": "claude"
@@ -17,9 +17,9 @@
       "output_path": ".claude/agents/architect-alphonso.md",
       "profile_urn": "agent_profile:architect-alphonso",
       "projection_version": 1,
-      "source_hash": "ee67988d86756969ab7da6dc9be86902de5607380dfd1b260ccb37f563ae4ae5",
+      "source_hash": "97be12624a998dfae064529a4fac959cb25e2d61cff1eefe6e206f31e78014ff",
       "source_layer": "builtin",
-      "source_path": "/Users/kentgale/.local/pipx/venvs/spec-kitty-cli/lib/python3.13/site-packages/doctrine/agent_profiles/built-in/architect-alphonso.agent.yaml",
+      "source_path": "${SPEC_KITTY_PACKS_ROOT}/built-in/agent_profiles/architect-alphonso.agent.yaml",
       "tool_key": "claude"
     },
     {
@@ -28,7 +28,7 @@
       "output_path": ".claude/agents/comms-cleo.md",
       "profile_urn": "agent_profile:comms-cleo",
       "projection_version": 1,
-      "source_hash": "027b1640fcede2c102b163f05958b913532260405af15623b6cd17d5cc483d87",
+      "source_hash": "280238243c6ff359aae39d06a99db9f5775c5c1fff91bffbfa014329de1c9620",
       "source_layer": "builtin",
       "source_path": "${SPEC_KITTY_PACKS_ROOT}/built-in/agent_profiles/comms-cleo.agent.yaml",
       "tool_key": "claude"
@@ -39,9 +39,9 @@
       "output_path": ".claude/agents/curator-carla.md",
       "profile_urn": "agent_profile:curator-carla",
       "projection_version": 1,
-      "source_hash": "cc6b08c3391abe890ff2dc35b4d7faa3e6cb6566cacedfab2eb570fa9248cb0a",
+      "source_hash": "5b389532a6646522f3d1bafb07f232fb6e39f43488d56e0f4be691e525cf9093",
       "source_layer": "builtin",
-      "source_path": "/Users/kentgale/.local/pipx/venvs/spec-kitty-cli/lib/python3.13/site-packages/doctrine/agent_profiles/built-in/curator-carla.agent.yaml",
+      "source_path": "${SPEC_KITTY_PACKS_ROOT}/built-in/agent_profiles/curator-carla.agent.yaml",
       "tool_key": "claude"
     },
     {
@@ -50,9 +50,9 @@
       "output_path": ".claude/agents/debugger-debbie.md",
       "profile_urn": "agent_profile:debugger-debbie",
       "projection_version": 1,
-      "source_hash": "2aa4396ee2d102e49d4a0f076ed7d1a7a8e3d2da8c9d1dc6cc32843db780e7ac",
+      "source_hash": "e22df3c8a040fea35dd2a03509b8b21da117fa66a412aa274439b5b93b2474cb",
       "source_layer": "builtin",
-      "source_path": "/Users/kentgale/.local/pipx/venvs/spec-kitty-cli/lib/python3.13/site-packages/doctrine/agent_profiles/built-in/debugger-debbie.agent.yaml",
+      "source_path": "${SPEC_KITTY_PACKS_ROOT}/built-in/agent_profiles/debugger-debbie.agent.yaml",
       "tool_key": "claude"
     },
     {
@@ -61,9 +61,9 @@
       "output_path": ".claude/agents/designer-dagmar.md",
       "profile_urn": "agent_profile:designer-dagmar",
       "projection_version": 1,
-      "source_hash": "1428bfeabd57c8cd636d72d587b11799b84a0f4d325aea24880f6d8e4083f6c7",
+      "source_hash": "868b02e713161c5f77faa76df57b641f177724d169a663fd60e54eab4c66702f",
       "source_layer": "builtin",
-      "source_path": "/Users/kentgale/.local/pipx/venvs/spec-kitty-cli/lib/python3.13/site-packages/doctrine/agent_profiles/built-in/designer-dagmar.agent.yaml",
+      "source_path": "${SPEC_KITTY_PACKS_ROOT}/built-in/agent_profiles/designer-dagmar.agent.yaml",
       "tool_key": "claude"
     },
     {
@@ -72,20 +72,20 @@
       "output_path": ".claude/agents/diagram-daisy.md",
       "profile_urn": "agent_profile:diagram-daisy",
       "projection_version": 1,
-      "source_hash": "c5d3a2f12e1563ab00a8ddd4e09580d32b27b37f5f58e3e6dc8f20dc9cee853a",
+      "source_hash": "e97e20c245ab5dfbca810629a0be46666c9d85867e32440fa5a644fe525d1a8e",
       "source_layer": "builtin",
       "source_path": "${SPEC_KITTY_PACKS_ROOT}/built-in/agent_profiles/diagram-daisy.agent.yaml",
       "tool_key": "claude"
     },
     {
-      "file_hash": "097fb87e2464b80f2e3f4ae449d18794c6ffc13d91587bb72f94a9fe34bc356c",
+      "file_hash": "6afad45926c785ed3241b6e2ac4214bf7d0667ac31fb5fafed648cdf9f032296",
       "format": "claude-agent",
       "output_path": ".claude/agents/doctrine-daphne.md",
       "profile_urn": "agent_profile:doctrine-daphne",
       "projection_version": 1,
-      "source_hash": "74cfa3be38947e24458f7f8788a406fe078f45a6ff58efcd2f31ab8f846ff007",
+      "source_hash": "1f6357cd142813f497c96abf951a7c25fb99d056af31dbd5d7f0282b48ec86cf",
       "source_layer": "builtin",
-      "source_path": "/Users/kentgale/.local/pipx/venvs/spec-kitty-cli/lib/python3.13/site-packages/doctrine/agent_profiles/built-in/doctrine-daphne.agent.yaml",
+      "source_path": "${SPEC_KITTY_PACKS_ROOT}/built-in/agent_profiles/doctrine-daphne.agent.yaml",
       "tool_key": "claude"
     },
     {
@@ -94,9 +94,9 @@
       "output_path": ".claude/agents/generic-agent.md",
       "profile_urn": "agent_profile:generic-agent",
       "projection_version": 1,
-      "source_hash": "0e01f1d14aa139e2611966b14d8087d0bb87cbcd1cdc969287e453e2c871a449",
+      "source_hash": "c7f194a6af7dee105d4e7eeeb99c09f890dd310e6de51ec535233f0a459108e2",
       "source_layer": "builtin",
-      "source_path": "/Users/kentgale/.local/pipx/venvs/spec-kitty-cli/lib/python3.13/site-packages/doctrine/agent_profiles/built-in/generic-agent.agent.yaml",
+      "source_path": "${SPEC_KITTY_PACKS_ROOT}/built-in/agent_profiles/generic-agent.agent.yaml",
       "tool_key": "claude"
     },
     {
@@ -105,9 +105,9 @@
       "output_path": ".claude/agents/implementer-ivan.md",
       "profile_urn": "agent_profile:implementer-ivan",
       "projection_version": 1,
-      "source_hash": "2dfd700ecf84562ccc94d8d4204c7cd8c8f18cf0b6a41f0b802bf2125c4651d2",
+      "source_hash": "173864c3da2d192565a14b473a984a4d23f07ced08474e7dd077d8fd18c1666f",
       "source_layer": "builtin",
-      "source_path": "/Users/kentgale/.local/pipx/venvs/spec-kitty-cli/lib/python3.13/site-packages/doctrine/agent_profiles/built-in/implementer-ivan.agent.yaml",
+      "source_path": "${SPEC_KITTY_PACKS_ROOT}/built-in/agent_profiles/implementer-ivan.agent.yaml",
       "tool_key": "claude"
     },
     {
@@ -116,7 +116,7 @@
       "output_path": ".claude/agents/lexical-larry.md",
       "profile_urn": "agent_profile:lexical-larry",
       "projection_version": 1,
-      "source_hash": "d8b4d31d54e0c113150bf38ef3bbde76243d159f2da7b9b8b981e04b014e3c02",
+      "source_hash": "66e45c1812df79ae1195a0427baa9d0b3cc7d964e40e2bed8c887cbc3d613b5f",
       "source_layer": "builtin",
       "source_path": "${SPEC_KITTY_PACKS_ROOT}/built-in/agent_profiles/lexical-larry.agent.yaml",
       "tool_key": "claude"
@@ -127,7 +127,7 @@
       "output_path": ".claude/agents/minutes-maker-mahad.md",
       "profile_urn": "agent_profile:minutes-maker-mahad",
       "projection_version": 1,
-      "source_hash": "21fde99793ee8903ac7489c4185b41189cd48e8280a353d55f248041179b6b98",
+      "source_hash": "b7a1b0305d1fdfa826a3d1fb2d8d0c37022ddb3fba0c62c89bd0dde78ead98f9",
       "source_layer": "builtin",
       "source_path": "${SPEC_KITTY_PACKS_ROOT}/built-in/agent_profiles/minutes-maker-mahad.agent.yaml",
       "tool_key": "claude"
@@ -138,9 +138,9 @@
       "output_path": ".claude/agents/paula-patterns.md",
       "profile_urn": "agent_profile:paula-patterns",
       "projection_version": 1,
-      "source_hash": "9e9a7e204fe7f3c66a120e2c36d9e9cf519e489f88982cce1c65114fde527899",
+      "source_hash": "9a77e5bc10ecda6fff4464f7ed3dab08ad25a8db7d94a70981699d17358ca9ab",
       "source_layer": "builtin",
-      "source_path": "/Users/kentgale/.local/pipx/venvs/spec-kitty-cli/lib/python3.13/site-packages/doctrine/agent_profiles/built-in/paula-patterns.agent.yaml",
+      "source_path": "${SPEC_KITTY_PACKS_ROOT}/built-in/agent_profiles/paula-patterns.agent.yaml",
       "tool_key": "claude"
     },
     {
@@ -149,9 +149,9 @@
       "output_path": ".claude/agents/planner-priti.md",
       "profile_urn": "agent_profile:planner-priti",
       "projection_version": 1,
-      "source_hash": "a75a69594825554fc286c1c7a6d7a70707ba6a0724686cf6f3546a33b92a4a87",
+      "source_hash": "ff91fb7d097934f17e9b2d3fb8b782c2fdc7afde8aef0f96648c2efe10394d41",
       "source_layer": "builtin",
-      "source_path": "/Users/kentgale/.local/pipx/venvs/spec-kitty-cli/lib/python3.13/site-packages/doctrine/agent_profiles/built-in/planner-priti.agent.yaml",
+      "source_path": "${SPEC_KITTY_PACKS_ROOT}/built-in/agent_profiles/planner-priti.agent.yaml",
       "tool_key": "claude"
     },
     {
@@ -160,20 +160,20 @@
       "output_path": ".claude/agents/randy-reducer.md",
       "profile_urn": "agent_profile:randy-reducer",
       "projection_version": 1,
-      "source_hash": "495904c9937c2977f2696a6c0e5ce38903a6b3eb85600953882c81caaea7d098",
+      "source_hash": "27f3b27a66470422a932b0f7e2c3759501409b263b58842b8b34528af9b37bcf",
       "source_layer": "builtin",
-      "source_path": "/Users/kentgale/.local/pipx/venvs/spec-kitty-cli/lib/python3.13/site-packages/doctrine/agent_profiles/built-in/randy-reducer.agent.yaml",
+      "source_path": "${SPEC_KITTY_PACKS_ROOT}/built-in/agent_profiles/randy-reducer.agent.yaml",
       "tool_key": "claude"
     },
     {
-      "file_hash": "c2c398f4d63776757ef19dc3942e22ef9904a7e7770f15b6a45971fe4bcaf8b3",
+      "file_hash": "ff49f440763c4b8243b0338a55b64f4cca1fbd27046edc0d0561fd687fe7f0c8",
       "format": "claude-agent",
       "output_path": ".claude/agents/researcher-robbie.md",
       "profile_urn": "agent_profile:researcher-robbie",
       "projection_version": 1,
-      "source_hash": "35db0efc2dcf050a4fe337f474998150c4ab47dc2a28b8a1e4cbaab6c64cff5d",
+      "source_hash": "f51b516086eeeaad75ca8634febb8819ce87bc82380971e0623769507ea32e40",
       "source_layer": "builtin",
-      "source_path": "/Users/kentgale/.local/pipx/venvs/spec-kitty-cli/lib/python3.13/site-packages/doctrine/agent_profiles/built-in/researcher-robbie.agent.yaml",
+      "source_path": "${SPEC_KITTY_PACKS_ROOT}/built-in/agent_profiles/researcher-robbie.agent.yaml",
       "tool_key": "claude"
     },
     {
@@ -182,9 +182,9 @@
       "output_path": ".claude/agents/retrospective-facilitator.md",
       "profile_urn": "agent_profile:retrospective-facilitator",
       "projection_version": 1,
-      "source_hash": "de4e2d2c641e773180e84ea3bc60beb937e66aadcef6012db392289a088275c4",
+      "source_hash": "d6f039737ce343e1376b84cd00deaefdaaf10145c7169d491f2f426d608fcf42",
       "source_layer": "builtin",
-      "source_path": "/Users/kentgale/.local/pipx/venvs/spec-kitty-cli/lib/python3.13/site-packages/doctrine/agent_profiles/built-in/retrospective-facilitator.agent.yaml",
+      "source_path": "${SPEC_KITTY_PACKS_ROOT}/built-in/agent_profiles/retrospective-facilitator.agent.yaml",
       "tool_key": "claude"
     },
     {
@@ -193,9 +193,9 @@
       "output_path": ".claude/agents/reviewer-renata.md",
       "profile_urn": "agent_profile:reviewer-renata",
       "projection_version": 1,
-      "source_hash": "fbde36d76efb02fa83ee3968cc6f84dde6e1d758d236ba6c389da638636eb286",
+      "source_hash": "6ed595685f47c86596a7a7ed3c1dae26b0408193813c1104b78e54d59ac01c4e",
       "source_layer": "builtin",
-      "source_path": "/Users/kentgale/.local/pipx/venvs/spec-kitty-cli/lib/python3.13/site-packages/doctrine/agent_profiles/built-in/reviewer-renata.agent.yaml",
+      "source_path": "${SPEC_KITTY_PACKS_ROOT}/built-in/agent_profiles/reviewer-renata.agent.yaml",
       "tool_key": "claude"
     },
     {
@@ -204,7 +204,7 @@
       "output_path": ".claude/agents/scribe-sally.md",
       "profile_urn": "agent_profile:scribe-sally",
       "projection_version": 1,
-      "source_hash": "a7de3f3d8b49e5bd2d749469132221c0b5f14fb4d148f803e21bc107779eeed8",
+      "source_hash": "351cc3f66935bc681e347e89ead3d7bce80912a176311d6bd2ba0ca85da22d63",
       "source_layer": "builtin",
       "source_path": "${SPEC_KITTY_PACKS_ROOT}/built-in/agent_profiles/scribe-sally.agent.yaml",
       "tool_key": "claude"
@@ -215,7 +215,7 @@
       "output_path": ".claude/agents/synthesizer-sam.md",
       "profile_urn": "agent_profile:synthesizer-sam",
       "projection_version": 1,
-      "source_hash": "0bac561a014f11420b669d252b3996579a925421f625f345dbbbbd885e547264",
+      "source_hash": "de4acb3c1542511c86da9ffd7b49c36c5d3e9e305fab2492f09e9a6a79b14388",
       "source_layer": "builtin",
       "source_path": "${SPEC_KITTY_PACKS_ROOT}/built-in/agent_profiles/synthesizer-sam.agent.yaml",
       "tool_key": "claude"

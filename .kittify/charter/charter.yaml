@@ -433,3 +433,8 @@ activated_procedures: []
 activated_agent_profiles: []
 activated_mission_step_contracts: []
 activated_glossary_packs: []
+mission_type_activations:
+- software-dev
+- documentation
+- research
+- plan
