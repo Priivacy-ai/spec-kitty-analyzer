@@ -1,7 +1,7 @@
 {
   "version": 1,
   "created_at": "2026-06-25T18:36:54.162532+00:00",
-  "updated_at": "2026-10-02T15:46:53.607336+00:00",
+  "updated_at": "2026-10-02T16:00:41.671801+00:00",
   "spec_kitty_version": "3.2.2",
   "entries": [
     {
@@ -130,7 +130,7 @@
       "installed_path": ".claude/skills/spec-kitty-implement-review/SKILL.md",
       "installation_class": "native-root-required",
       "agent_key": "claude",
-      "content_hash": "sha256:f1312e85c538d4584c7a7696e009860645297b4eb8d7587beb74dcb1f92d7f65",
+      "content_hash": "sha256:60f1be4606f947a400e61ee559ac8931090b945ce8781b9007d365c02e553587",
       "installed_at": "2026-08-23T05:47:13.580504+00:00",
       "delivery_mode": "copy"
     },
@@ -160,7 +160,7 @@
       "installed_path": ".claude/skills/spec-kitty-mission-review/SKILL.md",
       "installation_class": "native-root-required",
       "agent_key": "claude",
-      "content_hash": "sha256:5a7d4027cf81b155e5d5776a0978d6b6dbb37d55e7c1784151ee08145d08e7e7",
+      "content_hash": "sha256:db6d9aa36aa2dc4b955700afd6484112e218848e43940fc7ba57e39f030fad38",
       "installed_at": "2026-08-23T05:47:13.586867+00:00",
       "delivery_mode": "copy"
     },
@@ -180,7 +180,7 @@
       "installed_path": ".claude/skills/spec-kitty-mission-system/SKILL.md",
       "installation_class": "native-root-required",
       "agent_key": "claude",
-      "content_hash": "sha256:42678a3c77c4d9552df5015613ec9fbb6b2afdea14e83c9d9ae6414b9740ce6e",
+      "content_hash": "sha256:792594c1a9c57a65f6eb9157c44860b0964a6060523ee76b25250275a881abb0",
       "installed_at": "2026-08-23T05:47:13.594367+00:00",
       "delivery_mode": "copy"
     },
@@ -220,7 +220,7 @@
       "installed_path": ".claude/skills/spec-kitty-orchestrator-api-operator/references/orchestrator-api-contract.md",
       "installation_class": "native-root-required",
       "agent_key": "claude",
-      "content_hash": "sha256:147363b21eec856eeafef96463ea9b6b033e591eb094a8c19cfe7551d37ee464",
+      "content_hash": "sha256:4507ee13dc74d6d8fe3b0c9e5c2514c6065c12422137eeb496a9cc523cd82475",
       "installed_at": "2026-08-23T05:47:13.600261+00:00",
       "delivery_mode": "copy"
     },
@@ -270,7 +270,7 @@
       "installed_path": ".claude/skills/spec-kitty-runtime-review/SKILL.md",
       "installation_class": "native-root-required",
       "agent_key": "claude",
-      "content_hash": "sha256:5c686f76d03e585a0ba91c8c959bdffb5a7762b57a17991ebacd8d030f2d889c",
+      "content_hash": "sha256:254b52d52296aeb1ded110cb5205c9af8a14122f58801228f63b6878a3e6d6c2",
       "installed_at": "2026-08-23T05:47:13.617203+00:00",
       "delivery_mode": "copy"
     },
@@ -570,7 +570,7 @@
       "installed_path": ".claude/skills/spk-meta-skill-map/references/spk-skill-map.md",
       "installation_class": "native-root-required",
       "agent_key": "claude",
-      "content_hash": "sha256:fce757da43b3a07c66e5d8452780e08de5e4c6980c724275c23b2b79601e5187",
+      "content_hash": "sha256:b47047b746da1850bc610065c44de32af56163bc047a5770637338a0aa66c35d",
       "installed_at": "2026-08-23T05:47:13.688562+00:00",
       "delivery_mode": "copy"
     },

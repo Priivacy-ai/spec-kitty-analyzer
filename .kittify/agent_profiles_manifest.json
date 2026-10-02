@@ -83,7 +83,7 @@
       "output_path": ".claude/agents/doctrine-daphne.md",
       "profile_urn": "agent_profile:doctrine-daphne",
       "projection_version": 1,
-      "source_hash": "1f6357cd142813f497c96abf951a7c25fb99d056af31dbd5d7f0282b48ec86cf",
+      "source_hash": "6c1779acaa8c11438846a30f347bb636dae1a4521bf1297b038e3349ad3f54d9",
       "source_layer": "builtin",
       "source_path": "${SPEC_KITTY_PACKS_ROOT}/built-in/agent_profiles/doctrine-daphne.agent.yaml",
       "tool_key": "claude"
