@@ -3,9 +3,9 @@
 # DO NOT EDIT MANUALLY
 
 spec_kitty:
-  version: 4.0.0rc1
+  version: 4.0.0rc5
   initialized_at: '2026-06-25T14:36:54.565873'
-  last_upgraded_at: '2026-09-14T00:14:15.571295+00:00'
+  last_upgraded_at: '2026-10-02T15:46:52.141758+00:00'
   schema_version: 3
 environment:
   python_version: 3.13.14
@@ -114,3 +114,32 @@ migrations:
     result: success
     notes: 'Removed managed blanket line: ''.cursor/''; Added gitignore entry: .cursor/rules/spec-kitty.mdc;
       Added gitignore entry: .cursor/commands/; Added gitignore entry: .cursor/skills/'
+  - id: 4_0_0rc5_heal_run_index_paths
+    applied_at: '2026-10-02T15:46:49.262359+00:00'
+    result: skipped
+    notes: Not applicable
+  - id: 4_0_0rc5_heal_template_set_provenance
+    applied_at: '2026-10-02T15:46:49.337042+00:00'
+    result: skipped
+    notes: Not applicable
+  - id: 4_0_0rc5_hosted_endpoint_session_backfill
+    applied_at: '2026-10-02T15:46:49.344088+00:00'
+    result: skipped
+    notes: Not applicable
+  - id: 4_0_0rc5_install_lane_tip_recorder
+    applied_at: '2026-10-02T15:46:49.472883+00:00'
+    result: success
+    notes: 'installed lane-tip recorder hook: post-commit; installed lane-tip recorder
+      hook: post-rewrite'
+  - id: 4.0.0rc5_retire_bundled_dashboard
+    applied_at: '2026-10-02T15:46:49.483744+00:00'
+    result: skipped
+    notes: Not applicable
+  - id: 4.0.0rc5_retire_single_owner_doctrine_ids
+    applied_at: '2026-10-02T15:46:52.120815+00:00'
+    result: success
+    notes: Removed boring-code-review from .kittify/charter/charter.yaml (catalog)
+  - id: 4_0_0rc5_single_branch_code_lanes_restamp
+    applied_at: '2026-10-02T15:46:52.134421+00:00'
+    result: skipped
+    notes: Not applicable

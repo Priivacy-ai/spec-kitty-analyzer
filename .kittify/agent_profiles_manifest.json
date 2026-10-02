@@ -17,7 +17,7 @@
       "output_path": ".claude/agents/architect-alphonso.md",
       "profile_urn": "agent_profile:architect-alphonso",
       "projection_version": 1,
-      "source_hash": "97be12624a998dfae064529a4fac959cb25e2d61cff1eefe6e206f31e78014ff",
+      "source_hash": "4bb8d2478259d776b3b9c94ffca4eaae64f46f8ebe971a42e25196b88ed6279a",
       "source_layer": "builtin",
       "source_path": "${SPEC_KITTY_PACKS_ROOT}/built-in/agent_profiles/architect-alphonso.agent.yaml",
       "tool_key": "claude"
@@ -50,7 +50,7 @@
       "output_path": ".claude/agents/debugger-debbie.md",
       "profile_urn": "agent_profile:debugger-debbie",
       "projection_version": 1,
-      "source_hash": "e22df3c8a040fea35dd2a03509b8b21da117fa66a412aa274439b5b93b2474cb",
+      "source_hash": "84485d9915b7b090cfc644e13dc82ef8fc253c3da7ee1847e566ada767a03ad0",
       "source_layer": "builtin",
       "source_path": "${SPEC_KITTY_PACKS_ROOT}/built-in/agent_profiles/debugger-debbie.agent.yaml",
       "tool_key": "claude"
@@ -105,7 +105,7 @@
       "output_path": ".claude/agents/implementer-ivan.md",
       "profile_urn": "agent_profile:implementer-ivan",
       "projection_version": 1,
-      "source_hash": "173864c3da2d192565a14b473a984a4d23f07ced08474e7dd077d8fd18c1666f",
+      "source_hash": "d31147245e98b300125d966ea32f9ba411de0bab683774b4d4c0b190c70f99b2",
       "source_layer": "builtin",
       "source_path": "${SPEC_KITTY_PACKS_ROOT}/built-in/agent_profiles/implementer-ivan.agent.yaml",
       "tool_key": "claude"
@@ -122,14 +122,14 @@
       "tool_key": "claude"
     },
     {
-      "file_hash": "925323a4d7d49c43b42843c79be98b16f0068ca6ad024d3ab191cc6795f4ea2c",
+      "file_hash": "196981239ccdad4bf39ba8d54f83b7216a90e2f895ee2a37233151111cbccd12",
       "format": "claude-agent",
-      "output_path": ".claude/agents/minutes-maker-mahad.md",
-      "profile_urn": "agent_profile:minutes-maker-mahad",
+      "output_path": ".claude/agents/minutes-mahad.md",
+      "profile_urn": "agent_profile:minutes-mahad",
       "projection_version": 1,
-      "source_hash": "b7a1b0305d1fdfa826a3d1fb2d8d0c37022ddb3fba0c62c89bd0dde78ead98f9",
+      "source_hash": "7247e61f9768e6d0f9ea8936aeaeff152600e6e5d0902545894de156598298ca",
       "source_layer": "builtin",
-      "source_path": "${SPEC_KITTY_PACKS_ROOT}/built-in/agent_profiles/minutes-maker-mahad.agent.yaml",
+      "source_path": "${SPEC_KITTY_PACKS_ROOT}/built-in/agent_profiles/minutes-mahad.agent.yaml",
       "tool_key": "claude"
     },
     {
@@ -138,7 +138,7 @@
       "output_path": ".claude/agents/paula-patterns.md",
       "profile_urn": "agent_profile:paula-patterns",
       "projection_version": 1,
-      "source_hash": "9a77e5bc10ecda6fff4464f7ed3dab08ad25a8db7d94a70981699d17358ca9ab",
+      "source_hash": "0926d47d576bdbe8dd8e9ad794209ad29e360832a570333382271d3f6c8450cc",
       "source_layer": "builtin",
       "source_path": "${SPEC_KITTY_PACKS_ROOT}/built-in/agent_profiles/paula-patterns.agent.yaml",
       "tool_key": "claude"
@@ -149,7 +149,7 @@
       "output_path": ".claude/agents/planner-priti.md",
       "profile_urn": "agent_profile:planner-priti",
       "projection_version": 1,
-      "source_hash": "ff91fb7d097934f17e9b2d3fb8b782c2fdc7afde8aef0f96648c2efe10394d41",
+      "source_hash": "1fa915e4c9874cd8135d9a324d95ae55686f68895f7b827858cc98bf49db86d4",
       "source_layer": "builtin",
       "source_path": "${SPEC_KITTY_PACKS_ROOT}/built-in/agent_profiles/planner-priti.agent.yaml",
       "tool_key": "claude"
@@ -193,7 +193,7 @@
       "output_path": ".claude/agents/reviewer-renata.md",
       "profile_urn": "agent_profile:reviewer-renata",
       "projection_version": 1,
-      "source_hash": "6ed595685f47c86596a7a7ed3c1dae26b0408193813c1104b78e54d59ac01c4e",
+      "source_hash": "9ae3b1c8fe9f97506a67b69ecc4e681fa6d6c8fb7e3e82b13031c5058328ad17",
       "source_layer": "builtin",
       "source_path": "${SPEC_KITTY_PACKS_ROOT}/built-in/agent_profiles/reviewer-renata.agent.yaml",
       "tool_key": "claude"
@@ -204,7 +204,7 @@
       "output_path": ".claude/agents/scribe-sally.md",
       "profile_urn": "agent_profile:scribe-sally",
       "projection_version": 1,
-      "source_hash": "351cc3f66935bc681e347e89ead3d7bce80912a176311d6bd2ba0ca85da22d63",
+      "source_hash": "6600c3d6ff7c1cfa57abc5bd03a94bd93154408dbd59d8a52f124361728bba5c",
       "source_layer": "builtin",
       "source_path": "${SPEC_KITTY_PACKS_ROOT}/built-in/agent_profiles/scribe-sally.agent.yaml",
       "tool_key": "claude"
